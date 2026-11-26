@@ -1308,15 +1308,7 @@ public final class SkuaConsoleScreen extends Screen {
         }
     }
 
-    private JsonObject findById(List<JsonObject> source, int id) {
-        for (JsonObject item : source) {
-            if (readNumber(item, "id") == id) {
-                return item;
-            }
-        }
 
-        return null;
-    }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
