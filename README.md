@@ -30,11 +30,16 @@ This project does **not** attempt to execute AQW scripts inside Minecraft or rei
 
 | Deck | What it is for |
 | --- | --- |
-| **Dashboard** | Connection state, player, health, mana, map and active script |
-| **Scripts** | Browse the scripts already exposed by VibeSkua, select and run them |
-| **Controls** | Combat skills, attack, rest and quick map actions |
-| **Inventory** | Inventory and bank visibility, with room for item actions |
-| **Fleet** | Multi-tab and Army Queue controls |
+| **Dashboard** | Live connection, player stats, location and script state |
+| **Scripts** | Browse, select, load and start scripts already exposed by VibeSkua |
+| **Controls** | Attack, skills, rest and jump-to-spawn |
+| **Inventory** | Bag/bank browsing, equip, deposit and withdraw |
+| **Quests** | Requirements, readiness checks and quest completion |
+| **Drops** | Select/pick up a drop or collect all |
+| **Chat** | Recent chat feed and zone-message sending |
+| **Logs** | Latest script telemetry |
+| **Options** | Live client option toggles |
+| **Fleet** | Running tabs, active-tab selection and Army Queue basics |
 
 The first-person item model is designed as a small rugged handheld: dark casing, luminous teal display, tactile controls and a little violet Skua personality. The in-game screen follows the same visual language.
 
