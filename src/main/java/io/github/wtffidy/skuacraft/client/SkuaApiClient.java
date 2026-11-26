@@ -17,7 +17,7 @@ import java.util.concurrent.Executors;
 import java.util.function.Consumer;
 
 public final class SkuaApiClient {
-    private static final ExecutorService IO = Executors.newSingleThreadExecutor(task -> {
+    private static final ExecutorService IO = Executors.newFixedThreadPool(3, task -> {
         Thread thread = new Thread(task, "SkuaCraft-API");
         thread.setDaemon(true);
         return thread;
