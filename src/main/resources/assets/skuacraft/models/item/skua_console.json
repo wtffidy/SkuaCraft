@@ -1,0 +1,58 @@
+{
+  "credit": "SkuaCraft",
+  "textures": {
+    "console": "skuacraft:item/skua_console",
+    "particle": "skuacraft:item/skua_console"
+  },
+  "elements": [
+    {
+      "from": [1, 0, 7],
+      "to": [15, 16, 9],
+      "faces": {
+        "north": { "uv": [0, 0, 64, 64], "texture": "#console" },
+        "south": { "uv": [0, 0, 64, 64], "texture": "#console" },
+        "east": { "uv": [0, 0, 64, 64], "texture": "#console" },
+        "west": { "uv": [0, 0, 64, 64], "texture": "#console" },
+        "up": { "uv": [0, 0, 64, 64], "texture": "#console" },
+        "down": { "uv": [0, 0, 64, 64], "texture": "#console" }
+      }
+    }
+  ],
+  "display": {
+    "thirdperson_righthand": {
+      "rotation": [0, 90, -35],
+      "translation": [0, 3.5, 1],
+      "scale": [0.62, 0.62, 0.62]
+    },
+    "thirdperson_lefthand": {
+      "rotation": [0, -90, 35],
+      "translation": [0, 3.5, 1],
+      "scale": [0.62, 0.62, 0.62]
+    },
+    "firstperson_righthand": {
+      "rotation": [-8, 22, 0],
+      "translation": [1, 2, 1],
+      "scale": [0.78, 0.78, 0.78]
+    },
+    "firstperson_lefthand": {
+      "rotation": [-8, -22, 0],
+      "translation": [1, 2, 1],
+      "scale": [0.78, 0.78, 0.78]
+    },
+    "gui": {
+      "rotation": [30, 225, 0],
+      "translation": [0, 0, 0],
+      "scale": [0.82, 0.82, 0.82]
+    },
+    "ground": {
+      "rotation": [0, 0, 0],
+      "translation": [0, 2, 0],
+      "scale": [0.55, 0.55, 0.55]
+    },
+    "fixed": {
+      "rotation": [0, 0, 0],
+      "translation": [0, 0, 0],
+      "scale": [0.7, 0.7, 0.7]
+    }
+  }
+}

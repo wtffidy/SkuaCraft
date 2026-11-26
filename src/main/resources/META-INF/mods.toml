@@ -1,0 +1,28 @@
+modLoader="javafml"
+loaderVersion="[47,)"
+license="All Rights Reserved"
+
+[[mods]]
+modId="skuacraft"
+version="\${mod_version}"
+displayName="SkuaCraft"
+displayURL="https://github.com/wtffidy/SkuaCraft"
+authors="wtffidy"
+description='''
+A handheld VibeSkua control deck for Minecraft.
+Craft the console, hold it and right-click to open the Skua interface.
+'''
+
+[[dependencies.skuacraft]]
+modId="forge"
+mandatory=true
+versionRange="[47.4.28,)"
+ordering="NONE"
+side="BOTH"
+
+[[dependencies.skuacraft]]
+modId="minecraft"
+mandatory=true
+versionRange="[1.20.1,1.20.2)"
+ordering="NONE"
+side="BOTH"
