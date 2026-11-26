@@ -87,6 +87,7 @@ public final class SkuaConsoleScreen extends Screen {
     @Override
     public void tick() {
         super.tick();
+        chatInput.tick();
         ticks++;
 
         if (ticks % 40 == 0 && !statusPending) {
