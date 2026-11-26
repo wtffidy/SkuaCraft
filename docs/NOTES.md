@@ -67,18 +67,24 @@ The desktop client remains authoritative. If the API is offline, Minecraft must 
 - [x] Craftable Skua Console
 - [x] Custom item model and first-person transforms
 - [x] Non-blocking API client
-- [x] Dashboard and initial script/control panels
+- [x] Ten-panel navigation and live dashboard
+- [x] Script browsing, selection, load and start
+- [x] Combat actions, rest and jump-to-spawn
+- [x] Bag/bank browsing, equip, deposit and withdraw
+- [x] Quest requirement inspection and guarded completion
+- [x] Drop list, pickup and pickup-all
+- [x] Chat feed and zone-message sending
+- [x] Script log viewer
+- [x] Live client option toggles
+- [x] Client tab list, active-tab selection and Army Queue basics
 
 ### Milestone B · Full control deck
 - [ ] Script search, category filter and paging polish
 - [ ] Account/tab selector and per-tab routing
-- [ ] Full inventory and bank browsing
-- [ ] Quest requirements and completion
-- [ ] Drops and pickup controls
-- [ ] Chat feed and send panel
-- [ ] Script log viewer
-- [ ] Options toggles
-- [ ] Army Queue and fleet broadcast controls
+- [ ] Script search, category filters and richer paging
+- [ ] Per-tab routing for every command and manager-wide broadcast actions
+- [ ] Full inventory item metadata and advanced bulk actions
+- [ ] Army Queue step editing, presets and scheduler management
 
 ### Milestone C · Handheld theatre
 - [ ] Dedicated two-hand/arm pose while the console is open
