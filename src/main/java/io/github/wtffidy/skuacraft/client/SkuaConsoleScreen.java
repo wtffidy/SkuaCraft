@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 import net.minecraftforge.api.distmarker.Dist;
@@ -15,11 +16,8 @@ import java.util.List;
 @OnlyIn(Dist.CLIENT)
 public final class SkuaConsoleScreen extends Screen {
     private enum Page {
-        DASHBOARD,
-        SCRIPTS,
-        CONTROLS,
-        INVENTORY,
-        FLEET
+        DASHBOARD, SCRIPTS, CONTROLS, INVENTORY, QUESTS,
+        DROPS, CHAT, LOGS, OPTIONS, FLEET
     }
 
     private static final int INK = 0xFF090E16;
@@ -35,20 +33,57 @@ public final class SkuaConsoleScreen extends Screen {
     private static final int MUTED = 0xFF91A5B4;
     private static final int RED = 0xFFFF777D;
 
+    private static final String[][] NAVIGATION = {
+            {"DASHBOARD", "SCRIPTS", "CONTROLS", "INVENTORY", "QUESTS"},
+            {"DROPS", "CHAT", "LOGS", "OPTIONS", "FLEET"}
+    };
+
+    private static final String[][] OPTION_FIELDS = {
+            {"LagKiller", "lag_killer", "LAG KILLER"},
+            {"AutoRelogin", "auto_relogin", "AUTO RELOGIN"},
+            {"InfiniteRange", "infinite_range", "INFINITE RANGE"},
+            {"SkipCutscenes", "skip_cutscenes", "SKIP CUTSCENES"},
+            {"HeadlessMode", "headless_mode", "HEADLESS MODE"},
+            {"StreamerMode", "streamer_mode", "STREAMER MODE"},
+            {"DisableFX", "disable_fx", "DISABLE FX"},
+            {"AttackWithoutTarget", "attack_without_target", "ATTACK WITHOUT TARGET"},
+            {"DisableCollisions", "disable_collisions", "DISABLE COLLISIONS"},
+            {"HidePlayers", "hide_players", "HIDE PLAYERS"},
+            {"Magnetise", "magnetise", "MAGNETISE"},
+            {"RestPackets", "rest_packets", "REST PACKETS"}
+    };
+
     private final List<JsonObject> scripts = new ArrayList<>();
+    private final List<JsonObject> inventoryItems = new ArrayList<>();
+    private final List<JsonObject> bankItems = new ArrayList<>();
+    private final List<JsonObject> quests = new ArrayList<>();
+    private final List<JsonObject> tabs = new ArrayList<>();
+    private final List<String> drops = new ArrayList<>();
+    private final List<String> logs = new ArrayList<>();
+    private final List<JsonObject> chatMessages = new ArrayList<>();
+
     private JsonObject status = new JsonObject();
-    private JsonObject inventory = new JsonObject();
-    private JsonObject bank = new JsonObject();
-    private JsonObject fleet = new JsonObject();
+    private JsonObject options = new JsonObject();
+    private JsonObject queue = new JsonObject();
 
     private Page page = Page.DASHBOARD;
+    private EditBox chatInput;
+
     private String selectedScriptPath = "";
+    private int selectedItemId;
+    private String selectedItemName = "";
+    private int selectedQuestId;
+    private int selectedPid;
+    private String selectedDrop = "";
+    private boolean showBank;
+    private boolean confirmFleetStart;
+    private boolean confirmFleetStop;
     private String notice = "Initialising VibeSkua link...";
     private String connection = "CHECKING";
 
     private boolean statusPending;
     private boolean scriptsPending;
-    private int scriptOffset;
+    private int listOffset;
     private int ticks;
 
     private int frameX;
@@ -68,20 +103,22 @@ public final class SkuaConsoleScreen extends Screen {
     protected void init() {
         super.init();
 
-        frameWidth = Math.min(720, Math.max(310, width - 24));
-        frameHeight = Math.min(460, Math.max(260, height - 24));
+        frameWidth = Math.min(760, Math.max(320, width - 24));
+        frameHeight = Math.min(490, Math.max(280, height - 24));
         frameX = (width - frameWidth) / 2;
         frameY = (height - frameHeight) / 2;
         contentX = frameX + 18;
-        contentY = frameY + 88;
+        contentY = frameY + 112;
         contentWidth = frameWidth - 36;
-        contentHeight = frameHeight - 132;
+        contentHeight = frameHeight - 155;
+
+        chatInput = new EditBox(font, contentX + 15, contentY + contentHeight - 42,
+                contentWidth - 112, 27, Component.literal("Chat message"));
+        chatInput.setMaxLength(250);
+        chatInput.setVisible(page == Page.CHAT);
+        addRenderableWidget(chatInput);
 
         refreshStatus();
-
-        if (page == Page.SCRIPTS) {
-            refreshScripts();
-        }
     }
 
     @Override
@@ -119,6 +156,9 @@ public final class SkuaConsoleScreen extends Screen {
                 }
 
                 status = response;
+                if (response.has("options") && response.get("options").isJsonObject()) {
+                    options = response.getAsJsonObject("options");
+                }
                 connection = "ONLINE";
                 notice = "Live link  /  " + readString(status, "app", "VibeSkua")
                         + " " + readString(status, "version", "");
@@ -139,15 +179,14 @@ public final class SkuaConsoleScreen extends Screen {
         SkuaApiClient.get("/api/scripts", result -> {
             scriptsPending = false;
             scripts.clear();
-            scriptOffset = 0;
+            listOffset = 0;
 
             if (result != null && result.isJsonArray()) {
-                appendScripts(result.getAsJsonArray());
+                appendObjects(result.getAsJsonArray(), scripts);
             } else if (result != null && result.isJsonObject()) {
                 JsonElement list = result.getAsJsonObject().get("scripts");
-
                 if (list != null && list.isJsonArray()) {
-                    appendScripts(list.getAsJsonArray());
+                    appendObjects(list.getAsJsonArray(), scripts);
                 }
             }
 
@@ -157,11 +196,142 @@ public final class SkuaConsoleScreen extends Screen {
         });
     }
 
-    private void appendScripts(JsonArray array) {
+    private void refreshInventory() {
+        SkuaApiClient.get("/api/inventory", result -> {
+            inventoryItems.clear();
+            readObjectArray(result, "items", inventoryItems);
+            selectedItemId = 0;
+            selectedItemName = "";
+            showBank = false;
+            listOffset = 0;
+            notice = "Inventory refreshed  /  " + inventoryItems.size() + " entries.";
+        });
+    }
+
+    private void refreshBank() {
+        SkuaApiClient.get("/api/bank", result -> {
+            bankItems.clear();
+            readObjectArray(result, "items", bankItems);
+            selectedItemId = 0;
+            selectedItemName = "";
+            showBank = true;
+            listOffset = 0;
+            notice = "Bank refreshed  /  " + bankItems.size() + " entries.";
+        });
+    }
+
+    private void refreshQuests() {
+        SkuaApiClient.get("/api/quests", result -> {
+            quests.clear();
+            readObjectArray(result, "quests", quests);
+            listOffset = 0;
+            notice = "Quest list refreshed  /  " + quests.size() + " entries.";
+        });
+    }
+
+    private void refreshDrops() {
+        SkuaApiClient.get("/api/drops", result -> {
+            drops.clear();
+            JsonElement array = result != null && result.isJsonObject()
+                    ? result.getAsJsonObject().get("drops") : result;
+
+            if (array != null && array.isJsonArray()) {
+                for (JsonElement element : array.getAsJsonArray()) {
+                    if (element != null && !element.isJsonNull()) {
+                        String value = element.getAsString();
+                        if (!value.isBlank()) {
+                            drops.add(value);
+                        }
+                    }
+                }
+            }
+
+            listOffset = 0;
+            notice = "Drop list refreshed  /  " + drops.size() + " entries.";
+        });
+    }
+
+    private void refreshChat() {
+        SkuaApiClient.get("/api/chat", result -> {
+            chatMessages.clear();
+            readObjectArray(result, "messages", chatMessages);
+            listOffset = 0;
+            notice = "Chat feed refreshed.";
+        });
+    }
+
+    private void refreshLogs() {
+        SkuaApiClient.get("/api/logs", result -> {
+            logs.clear();
+            JsonElement array = result != null && result.isJsonObject()
+                    ? result.getAsJsonObject().get("logs") : result;
+
+            if (array != null && array.isJsonArray()) {
+                for (JsonElement element : array.getAsJsonArray()) {
+                    if (element != null && !element.isJsonNull()) {
+                        logs.add(element.getAsString());
+                    }
+                }
+            }
+
+            listOffset = 0;
+            notice = "Script log refreshed  /  " + logs.size() + " lines.";
+        });
+    }
+
+    private void refreshOptions() {
+        SkuaApiClient.get("/api/options", result -> {
+            if (result != null && result.isJsonObject()) {
+                options = result.getAsJsonObject();
+                notice = "Client options synchronized.";
+            } else {
+                notice = "Could not read client options.";
+            }
+        });
+    }
+
+    private void refreshFleet() {
+        SkuaApiClient.get("/api/tabs", result -> {
+            tabs.clear();
+            readObjectArray(result, "tabs", tabs);
+
+            if (result != null && result.isJsonObject()) {
+                int active = readNumber(result.getAsJsonObject(), "active_pid");
+                if (active > 0) {
+                    selectedPid = active;
+                }
+            }
+
+            notice = "Client tabs refreshed  /  " + tabs.size() + " tabs.";
+        });
+
+        SkuaApiClient.get("/api/army/queue", result -> {
+            if (result != null && result.isJsonObject()) {
+                queue = result.getAsJsonObject();
+            }
+        });
+    }
+
+    private void appendObjects(JsonArray array, List<JsonObject> target) {
         for (JsonElement element : array) {
             if (element != null && element.isJsonObject()) {
-                scripts.add(element.getAsJsonObject());
+                target.add(element.getAsJsonObject());
             }
+        }
+    }
+
+    private void readObjectArray(JsonElement source, String key, List<JsonObject> target) {
+        if (source == null) {
+            return;
+        }
+
+        JsonElement array = source;
+        if (source.isJsonObject()) {
+            array = source.getAsJsonObject().get(key);
+        }
+
+        if (array != null && array.isJsonArray()) {
+            appendObjects(array.getAsJsonArray(), target);
         }
     }
 
@@ -183,54 +353,50 @@ public final class SkuaConsoleScreen extends Screen {
 
             if (success) {
                 refreshStatus();
+                refreshCurrentPage();
             }
         });
     }
 
-    private JsonObject emptyBody() {
-        return new JsonObject();
-    }
-
-    private void selectPage(Page nextPage) {
-        if (page == nextPage) {
-            return;
-        }
-
-        page = nextPage;
-
+    private void refreshCurrentPage() {
         switch (page) {
             case SCRIPTS -> refreshScripts();
-            case INVENTORY -> refreshInventory();
+            case INVENTORY -> {
+                if (showBank) {
+                    refreshBank();
+                } else {
+                    refreshInventory();
+                }
+            }
+            case QUESTS -> refreshQuests();
+            case DROPS -> refreshDrops();
+            case CHAT -> refreshChat();
+            case LOGS -> refreshLogs();
+            case OPTIONS -> refreshOptions();
             case FLEET -> refreshFleet();
             default -> refreshStatus();
         }
     }
 
-    private void refreshInventory() {
-        SkuaApiClient.get("/api/inventory", result -> {
-            inventory = result != null && result.isJsonObject()
-                    ? result.getAsJsonObject()
-                    : new JsonObject();
-            notice = "Inventory snapshot refreshed.";
-        });
-    }
+    private void selectPage(Page nextPage) {
+        page = nextPage;
+        listOffset = 0;
+        chatInput.setVisible(page == Page.CHAT);
+        if (page != Page.CHAT) {
+            chatInput.setFocused(false);
+        }
 
-    private void refreshBank() {
-        SkuaApiClient.get("/api/bank", result -> {
-            bank = result != null && result.isJsonObject()
-                    ? result.getAsJsonObject()
-                    : new JsonObject();
-            notice = "Bank snapshot refreshed.";
-        });
-    }
-
-    private void refreshFleet() {
-        SkuaApiClient.get("/api/army/queue", result -> {
-            fleet = result != null && result.isJsonObject()
-                    ? result.getAsJsonObject()
-                    : new JsonObject();
-            notice = "Army Queue snapshot refreshed.";
-        });
+        switch (page) {
+            case SCRIPTS -> refreshScripts();
+            case INVENTORY -> refreshInventory();
+            case QUESTS -> refreshQuests();
+            case DROPS -> refreshDrops();
+            case CHAT -> refreshChat();
+            case LOGS -> refreshLogs();
+            case OPTIONS -> refreshOptions();
+            case FLEET -> refreshFleet();
+            default -> refreshStatus();
+        }
     }
 
     private void drawPanel(GuiGraphics graphics, int x, int y, int w, int h, int color) {
@@ -299,7 +465,6 @@ public final class SkuaConsoleScreen extends Screen {
         }
 
         String result = value;
-
         while (result.length() > 1 && font.width(result + "...") > maxWidth) {
             result = result.substring(0, result.length() - 1);
         }
@@ -309,6 +474,10 @@ public final class SkuaConsoleScreen extends Screen {
 
     private boolean inside(double mouseX, double mouseY, int x, int y, int w, int h) {
         return mouseX >= x && mouseX <= x + w && mouseY >= y && mouseY <= y + h;
+    }
+
+    private int visibleRows(int reservedHeight) {
+        return Math.max(1, Math.min(8, (contentHeight - reservedHeight) / 27));
     }
 
     @Override
@@ -325,12 +494,12 @@ public final class SkuaConsoleScreen extends Screen {
                 frameY + frameHeight - 11, TEAL_DARK);
 
         graphics.drawString(font, "SKUA SYSTEMS  /  FIELD CONSOLE MK-I",
-                frameX + 23, frameY + 14, TEAL, false);
+                frameX + 23, frameY + 13, TEAL, false);
         graphics.drawString(font, "VIBE LINK  " + connection,
-                frameX + frameWidth - 125, frameY + 14,
+                frameX + frameWidth - 125, frameY + 13,
                 "ONLINE".equals(connection) ? TEAL : RED, false);
         graphics.drawString(font, "POCKET COMMAND DECK     •     PROJECT INFINITY EDITION",
-                frameX + 23, frameY + 29, MUTED, false);
+                frameX + 23, frameY + 28, MUTED, false);
 
         renderNavigation(graphics, mouseX, mouseY);
         drawPanel(graphics, contentX, contentY, contentWidth, contentHeight, PANEL);
@@ -340,6 +509,11 @@ public final class SkuaConsoleScreen extends Screen {
             case SCRIPTS -> renderScripts(graphics);
             case CONTROLS -> renderControls(graphics);
             case INVENTORY -> renderInventory(graphics);
+            case QUESTS -> renderQuests(graphics);
+            case DROPS -> renderDrops(graphics);
+            case CHAT -> renderChat(graphics);
+            case LOGS -> renderLogs(graphics);
+            case OPTIONS -> renderOptions(graphics);
             case FLEET -> renderFleet(graphics);
         }
 
@@ -357,22 +531,24 @@ public final class SkuaConsoleScreen extends Screen {
     }
 
     private void renderNavigation(GuiGraphics graphics, int mouseX, int mouseY) {
-        String[] labels = {"DASHBOARD", "SCRIPTS", "CONTROLS", "INVENTORY", "FLEET"};
-        Page[] pages = Page.values();
-        int gap = 4;
-        int navY = frameY + 49;
+        int gap = 5;
         int navWidth = (frameWidth - 36 - gap * 4) / 5;
+        int navHeight = 22;
 
-        for (int i = 0; i < labels.length; i++) {
-            int x = frameX + 18 + i * (navWidth + gap);
-            boolean selected = page == pages[i];
-            boolean hovered = inside(mouseX, mouseY, x, navY, navWidth, 25);
-            int color = selected ? TEAL_DARK : hovered ? PANEL_ALT : PANEL_DARK;
+        for (int row = 0; row < NAVIGATION.length; row++) {
+            int navY = frameY + 47 + row * 25;
+            for (int column = 0; column < NAVIGATION[row].length; column++) {
+                int x = frameX + 18 + column * (navWidth + gap);
+                Page target = Page.values()[row * 5 + column];
+                boolean selected = page == target;
+                boolean hovered = inside(mouseX, mouseY, x, navY, navWidth, navHeight);
+                int color = selected ? TEAL_DARK : hovered ? PANEL_ALT : PANEL_DARK;
 
-            graphics.fill(x, navY, x + navWidth, navY + 25, color);
-            graphics.fill(x, navY, x + navWidth, navY + 2, selected ? TEAL : 0xFF35475B);
-            graphics.drawCenteredString(font, labels[i], x + navWidth / 2, navY + 9,
-                    selected ? TEXT : MUTED);
+                graphics.fill(x, navY, x + navWidth, navY + navHeight, color);
+                graphics.fill(x, navY, x + navWidth, navY + 2, selected ? TEAL : 0xFF35475B);
+                graphics.drawCenteredString(font, NAVIGATION[row][column],
+                        x + navWidth / 2, navY + 7, selected ? TEXT : MUTED);
+            }
         }
     }
 
@@ -394,7 +570,6 @@ public final class SkuaConsoleScreen extends Screen {
         };
 
         int cardY = top + 42;
-
         for (int i = 0; i < cards.length; i++) {
             int x = left + i * (cardWidth + gap);
             drawPanel(graphics, x, cardY, cardWidth, 43, PANEL_DARK);
@@ -426,7 +601,7 @@ public final class SkuaConsoleScreen extends Screen {
                         : "No target",
                 right, detailY + 90);
 
-        int buttonY = contentY + contentHeight - 43;
+        int buttonY = contentY + contentHeight - 41;
         int buttonWidth = (contentWidth - 42) / 3;
         drawButton(graphics, left, buttonY, buttonWidth, 27, "START / RESUME", TEAL, false);
         drawButton(graphics, left + buttonWidth + 6, buttonY, buttonWidth, 27, "PAUSE", AMBER, false);
@@ -436,19 +611,18 @@ public final class SkuaConsoleScreen extends Screen {
     private void renderScripts(GuiGraphics graphics) {
         int left = contentX + 15;
         int top = contentY + 13;
-
         graphics.drawString(font, "SCRIPT LIBRARY", left, top, TEAL, false);
         graphics.drawString(font, scripts.size() + " entries from the active Skua catalogue",
                 left, top + 15, MUTED, false);
 
         int rowTop = top + 34;
-        int rowHeight = 25;
-        int visibleRows = Math.max(1, (contentHeight - 115) / 28);
-        int end = Math.min(scripts.size(), scriptOffset + visibleRows);
+        int rowHeight = 24;
+        int rows = visibleRows(96);
+        int end = Math.min(scripts.size(), listOffset + rows);
 
-        for (int i = scriptOffset; i < end; i++) {
+        for (int i = listOffset; i < end; i++) {
             JsonObject script = scripts.get(i);
-            int y = rowTop + (i - scriptOffset) * 28;
+            int y = rowTop + (i - listOffset) * 27;
             String path = readString(script, "path", "");
             boolean selected = path.equals(selectedScriptPath);
             graphics.fill(left, y, contentX + contentWidth - 15, y + rowHeight,
@@ -458,8 +632,7 @@ public final class SkuaConsoleScreen extends Screen {
             String category = readString(script, "category", "Other");
             String local = readBoolean(script, "downloaded", false) ? "LOCAL" : "REMOTE";
 
-            graphics.drawString(font, clipped(name, contentWidth - 170),
-                    left + 8, y + 8, TEXT, false);
+            graphics.drawString(font, clipped(name, contentWidth - 170), left + 8, y + 8, TEXT, false);
             graphics.drawString(font, clipped(category + "  •  " + local, 112),
                     contentX + contentWidth - 126, y + 8, selected ? TEAL : MUTED, false);
         }
@@ -470,15 +643,12 @@ public final class SkuaConsoleScreen extends Screen {
                     left, rowTop + 12);
         }
 
-        int footerY = contentY + contentHeight - 43;
+        int footerY = contentY + contentHeight - 41;
         int buttonWidth = (contentWidth - 42) / 3;
         drawButton(graphics, left, footerY, buttonWidth, 27, "REFRESH", VIOLET, false);
         drawButton(graphics, left + buttonWidth + 6, footerY, buttonWidth, 27, "LOAD SELECTED", TEAL, false);
         drawButton(graphics, left + (buttonWidth + 6) * 2, footerY,
                 buttonWidth, 27, "START SELECTED", AMBER, false);
-
-        graphics.drawString(font, "Mouse wheel: browse  •  Select a row before loading",
-                left, contentY + contentHeight - 58, MUTED, false);
     }
 
     private void renderControls(GuiGraphics graphics) {
@@ -497,7 +667,6 @@ public final class SkuaConsoleScreen extends Screen {
 
         int skillWidth = (contentWidth - 30 - 24) / 5;
         int skillY = rowY + 52;
-
         for (int i = 0; i < 5; i++) {
             int x = left + i * (skillWidth + 6);
             drawButton(graphics, x, skillY, skillWidth, 37,
@@ -517,78 +686,295 @@ public final class SkuaConsoleScreen extends Screen {
 
     private void renderInventory(GuiGraphics graphics) {
         int left = contentX + 15;
-        int top = contentY + 15;
+        int top = contentY + 13;
+        List<JsonObject> items = showBank ? bankItems : inventoryItems;
 
-        graphics.drawString(font, "INVENTORY & BANK", left, top, TEAL, false);
-        int right = contentX + contentWidth / 2 + 6;
+        graphics.drawString(font, showBank ? "BANK STORAGE" : "INVENTORY",
+                left, top, TEAL, false);
+        graphics.drawString(font, items.size() + " item entries  •  "
+                        + (showBank ? "Bank" : "Bag"), left, top + 15, MUTED, false);
 
-        drawLabel(graphics, "BAG SLOTS", left, top + 47);
-        drawValue(graphics, readNumber(status, "inventory_used") + " / "
-                + readNumber(status, "inventory_max"), left, top + 64);
-        drawLabel(graphics, "BANK SLOTS", right, top + 47);
-        drawValue(graphics, readNumber(status, "bank_used") + " / "
-                + readNumber(status, "bank_max"), right, top + 64);
+        int rowTop = top + 34;
+        int rowHeight = 23;
+        int rows = visibleRows(96);
+        int end = Math.min(items.size(), listOffset + rows);
 
-        drawLabel(graphics, "BANK CACHE", left, top + 96);
-        drawValue(graphics, readBoolean(status, "bank_loaded", false) ? "LOADED" : "NOT LOADED",
-                left, top + 113);
+        for (int i = listOffset; i < end; i++) {
+            JsonObject item = items.get(i);
+            int y = rowTop + (i - listOffset) * 26;
+            int id = readNumber(item, "id");
+            boolean selected = selectedItemId == id && readString(item, "name", "").equals(selectedItemName);
+            graphics.fill(left, y, contentX + contentWidth - 15, y + rowHeight,
+                    selected ? TEAL_DARK : PANEL_DARK);
 
-        int bagCount = countArray(inventory, "items", "inventory");
-        int bankCount = countArray(bank, "items", "bank");
-        drawLabel(graphics, "LAST BAG SNAPSHOT", left, top + 144);
-        drawValue(graphics, bagCount > 0 ? bagCount + " item entries" : "Not loaded yet",
-                left, top + 159);
-        drawLabel(graphics, "LAST BANK SNAPSHOT", right, top + 144);
-        drawValue(graphics, bankCount > 0 ? bankCount + " item entries" : "Not loaded yet",
-                right, top + 159);
+            String name = readString(item, "name", "Unknown item");
+            String quantity = "x" + Math.max(1, readNumber(item, "quantity"));
+            String category = readString(item, "category", "Item");
+            String state = readBoolean(item, "equipped", false) ? "EQUIPPED" : category;
 
-        int y = contentY + contentHeight - 43;
+            graphics.drawString(font, clipped(name, contentWidth - 235), left + 8, y + 7, TEXT, false);
+            graphics.drawString(font, quantity + "  •  " + clipped(state, 90),
+                    contentX + contentWidth - 143, y + 7, selected ? TEAL : MUTED, false);
+        }
+
+        if (items.isEmpty()) {
+            drawValue(graphics, showBank ? "No bank entries loaded yet. Refresh the bank."
+                    : "No inventory entries returned by VibeSkua.", left, rowTop + 12);
+        }
+
+        int footerY = contentY + contentHeight - 41;
+        int buttonWidth = (contentWidth - 54) / 4;
+        drawButton(graphics, left, footerY, buttonWidth, 27, "BAG", TEAL, !showBank);
+        drawButton(graphics, left + buttonWidth + 6, footerY, buttonWidth, 27, "BANK", VIOLET, showBank);
+        drawButton(graphics, left + (buttonWidth + 6) * 2, footerY,
+                buttonWidth, 27, "EQUIP", AMBER, false);
+        drawButton(graphics, left + (buttonWidth + 6) * 3, footerY,
+                buttonWidth, 27, showBank ? "WITHDRAW" : "DEPOSIT", RED, false);
+    }
+
+    private void renderQuests(GuiGraphics graphics) {
+        int left = contentX + 15;
+        int top = contentY + 13;
+        int listWidth = (contentWidth - 42) / 2;
+
+        graphics.drawString(font, "ACTIVE QUESTS", left, top, TEAL, false);
+        graphics.drawString(font, quests.size() + " registered quests",
+                left, top + 15, MUTED, false);
+
+        int rowTop = top + 34;
+        int rows = visibleRows(82);
+        int end = Math.min(quests.size(), listOffset + rows);
+
+        for (int i = listOffset; i < end; i++) {
+            JsonObject quest = quests.get(i);
+            int y = rowTop + (i - listOffset) * 26;
+            int id = readNumber(quest, "id");
+            boolean selected = id == selectedQuestId;
+            graphics.fill(left, y, left + listWidth, y + 23,
+                    selected ? TEAL_DARK : PANEL_DARK);
+            graphics.drawString(font, clipped(readString(quest, "name", "Quest #" + id), listWidth - 62),
+                    left + 7, y + 7, TEXT, false);
+            drawValue(graphics, readBoolean(quest, "can_complete", false) ? "READY" : "ACTIVE",
+                    left + listWidth - 50, y + 7);
+        }
+
+        JsonObject selected = findById(quests, selectedQuestId);
+        int detailX = left + listWidth + 14;
+        graphics.drawString(font, "TURN-IN CHECK", detailX, top, VIOLET, false);
+        if (selected == null) {
+            drawValue(graphics, "Select a quest to inspect requirements.", detailX, top + 21);
+        } else {
+            drawValue(graphics, clipped(readString(selected, "name", "Selected quest"),
+                    contentWidth - listWidth - 50), detailX, top + 20);
+            JsonArray requirements = selected.has("requirements") && selected.get("requirements").isJsonArray()
+                    ? selected.getAsJsonArray("requirements") : new JsonArray();
+            int reqY = top + 47;
+            for (int i = 0; i < Math.min(5, requirements.size()); i++) {
+                JsonElement element = requirements.get(i);
+                if (!element.isJsonObject()) {
+                    continue;
+                }
+                JsonObject req = element.getAsJsonObject();
+                String line = readString(req, "name", "Item") + "  "
+                        + readNumber(req, "current") + " / " + readNumber(req, "required");
+                drawValue(graphics, clipped(line, contentWidth - listWidth - 50), detailX, reqY + i * 18);
+            }
+        }
+
+        int footerY = contentY + contentHeight - 41;
         int buttonWidth = (contentWidth - 42) / 3;
-        drawButton(graphics, left, y, buttonWidth, 27, "REFRESH BAG", TEAL, false);
-        drawButton(graphics, left + buttonWidth + 6, y, buttonWidth, 27, "OPEN BANK", VIOLET, false);
-        drawButton(graphics, left + (buttonWidth + 6) * 2, y, buttonWidth, 27, "LOAD BANK", AMBER, false);
+        drawButton(graphics, left, footerY, buttonWidth, 27, "REFRESH", VIOLET, false);
+        drawButton(graphics, left + buttonWidth + 6, footerY, buttonWidth, 27,
+                "COMPLETE SELECTED", TEAL, false);
+    }
+
+    private void renderDrops(GuiGraphics graphics) {
+        int left = contentX + 15;
+        int top = contentY + 13;
+
+        graphics.drawString(font, "DROP COLLECTOR", left, top, TEAL, false);
+        graphics.drawString(font, drops.size() + " visible drop entries",
+                left, top + 15, MUTED, false);
+
+        int rowTop = top + 34;
+        int rows = visibleRows(90);
+        int end = Math.min(drops.size(), listOffset + rows);
+
+        for (int i = listOffset; i < end; i++) {
+            int y = rowTop + (i - listOffset) * 27;
+            String item = drops.get(i);
+            boolean selected = selectedDrop.equals(item);
+            graphics.fill(left, y, contentX + contentWidth - 15, y + 24,
+                    selected ? TEAL_DARK : PANEL_DARK);
+            drawValue(graphics, clipped(item, contentWidth - 55), left + 8, y + 8);
+        }
+
+        if (drops.isEmpty()) {
+            drawValue(graphics, "No pending drops reported by VibeSkua.", left, rowTop + 12);
+        }
+
+        int footerY = contentY + contentHeight - 41;
+        int buttonWidth = (contentWidth - 42) / 3;
+        drawButton(graphics, left, footerY, buttonWidth, 27, "REFRESH", VIOLET, false);
+        drawButton(graphics, left + buttonWidth + 6, footerY, buttonWidth, 27, "PICK UP SELECTED", TEAL, false);
+        drawButton(graphics, left + (buttonWidth + 6) * 2, footerY, buttonWidth, 27, "PICK UP ALL", AMBER, false);
+    }
+
+    private void renderChat(GuiGraphics graphics) {
+        int left = contentX + 15;
+        int top = contentY + 13;
+        graphics.drawString(font, "LIVE CHAT", left, top, TEAL, false);
+        graphics.drawString(font, chatMessages.size() + " recent messages",
+                left, top + 15, MUTED, false);
+
+        int rowTop = top + 34;
+        int rows = visibleRows(92);
+        int end = Math.min(chatMessages.size(), listOffset + rows);
+
+        for (int i = listOffset; i < end; i++) {
+            JsonObject message = chatMessages.get(i);
+            int y = rowTop + (i - listOffset) * 25;
+            String sender = readString(message, "sender", "Unknown");
+            String type = readString(message, "type", "zone").toUpperCase();
+            String content = readString(message, "message", "");
+            drawLabel(graphics, clipped(type + "  /  " + sender, 160), left, y + 2);
+            drawValue(graphics, clipped(content, contentWidth - 205), left + 170, y + 2);
+        }
+
+        int footerY = contentY + contentHeight - 42;
+        drawButton(graphics, contentX + contentWidth - 91, footerY,
+                76, 27, "SEND", TEAL, false);
+    }
+
+    private void renderLogs(GuiGraphics graphics) {
+        int left = contentX + 15;
+        int top = contentY + 13;
+
+        graphics.drawString(font, "SCRIPT TELEMETRY", left, top, TEAL, false);
+        graphics.drawString(font, logs.size() + " recent log lines",
+                left, top + 15, MUTED, false);
+
+        int rowTop = top + 36;
+        int rows = visibleRows(74);
+        int end = Math.min(logs.size(), listOffset + rows);
+
+        for (int i = listOffset; i < end; i++) {
+            int y = rowTop + (i - listOffset) * 24;
+            graphics.fill(left, y, contentX + contentWidth - 15, y + 21, PANEL_DARK);
+            drawValue(graphics, clipped(logs.get(i), contentWidth - 48), left + 7, y + 7);
+        }
+
+        if (logs.isEmpty()) {
+            drawValue(graphics, "No script logs returned. Start or run a script to populate telemetry.",
+                    left, rowTop + 10);
+        }
+
+        drawButton(graphics, left, contentY + contentHeight - 41,
+                132, 27, "REFRESH LOGS", VIOLET, false);
+    }
+
+    private void renderOptions(GuiGraphics graphics) {
+        int left = contentX + 15;
+        int top = contentY + 14;
+        int gap = 8;
+        int columns = 3;
+        int buttonWidth = (contentWidth - 30 - gap * (columns - 1)) / columns;
+
+        graphics.drawString(font, "CLIENT OPTIONS", left, top, TEAL, false);
+        graphics.drawString(font, "Changes are applied directly to the active VibeSkua client.",
+                left, top + 16, MUTED, false);
+
+        for (int i = 0; i < OPTION_FIELDS.length; i++) {
+            int column = i % columns;
+            int row = i / columns;
+            int x = left + column * (buttonWidth + gap);
+            int y = top + 43 + row * 39;
+            String key = OPTION_FIELDS[i][1];
+            boolean enabled = readBoolean(options, key, false);
+            drawButton(graphics, x, y, buttonWidth, 31,
+                    OPTION_FIELDS[i][2] + "  " + (enabled ? "ON" : "OFF"),
+                    enabled ? TEAL : MUTED, enabled);
+        }
     }
 
     private void renderFleet(GuiGraphics graphics) {
         int left = contentX + 15;
-        int top = contentY + 15;
+        int top = contentY + 13;
+        int listWidth = (contentWidth - 42) / 2;
+        graphics.drawString(font, "CLIENT FLEET", left, top, TEAL, false);
+        graphics.drawString(font, tabs.size() + " visible client tabs",
+                left, top + 15, MUTED, false);
 
-        graphics.drawString(font, "FLEET COMMAND", left, top, TEAL, false);
-        graphics.drawString(font, "Multi-tab actions are handled by the VibeSkua manager gateway.",
-                left, top + 17, MUTED, false);
+        int rowTop = top + 34;
+        int rows = visibleRows(100);
+        int end = Math.min(tabs.size(), listOffset + rows);
 
-        drawLabel(graphics, "ACTIVE ACCOUNT", left, top + 56);
-        drawValue(graphics, clipped(readString(status, "username", "Unknown"), contentWidth / 2 - 25),
-                left, top + 72);
-        drawLabel(graphics, "SCRIPT STATE", contentX + contentWidth / 2, top + 56);
-        drawValue(graphics, readString(status, "script_status", "STOPPED"),
-                contentX + contentWidth / 2, top + 72);
+        for (int i = listOffset; i < end; i++) {
+            JsonObject tab = tabs.get(i);
+            int y = rowTop + (i - listOffset) * 25;
+            int pid = readNumber(tab, "pid");
+            boolean selected = pid == selectedPid;
+            graphics.fill(left, y, left + listWidth, y + 22,
+                    selected ? TEAL_DARK : PANEL_DARK);
+            String name = readString(tab, "username", "Skua tab");
+            String active = readBoolean(tab, "is_active", false) ? "ACTIVE" : "READY";
+            graphics.drawString(font, clipped(name, listWidth - 80), left + 7, y + 7, TEXT, false);
+            drawValue(graphics, active, left + listWidth - 49, y + 7);
+        }
 
-        drawLabel(graphics, "QUEUE STATUS", left, top + 111);
-        drawValue(graphics, clipped(readString(fleet, "status",
-                        readString(fleet, "message", "Refresh to query Army Queue")), contentWidth - 45),
-                left, top + 127);
+        int detailX = left + listWidth + 14;
+        graphics.drawString(font, "ARMY QUEUE", detailX, top, VIOLET, false);
+        String queueState = readBoolean(queue, "is_running", false)
+                ? (readBoolean(queue, "is_paused", false) ? "PAUSED" : "RUNNING")
+                : "STOPPED";
+        drawValue(graphics, "STATUS  " + queueState, detailX, top + 22);
+        drawValue(graphics, clipped(readString(queue, "status", "Manager queue state"),
+                contentWidth - listWidth - 55), detailX, top + 42);
+        drawValue(graphics, "STEPS  " + arraySize(queue, "steps"), detailX, top + 62);
 
-        int y = contentY + contentHeight - 43;
-        int buttonWidth = (contentWidth - 42) / 3;
-        drawButton(graphics, left, y, buttonWidth, 27, "REFRESH QUEUE", TEAL, false);
-        drawButton(graphics, left + buttonWidth + 6, y, buttonWidth, 27, "START QUEUE", VIOLET, false);
-        drawButton(graphics, left + (buttonWidth + 6) * 2, y, buttonWidth, 27, "STOP QUEUE", RED, false);
+        int footerY = contentY + contentHeight - 41;
+        int buttonWidth = (contentWidth - 54) / 4;
+        drawButton(graphics, left, footerY, buttonWidth, 27, "REFRESH", VIOLET, false);
+        drawButton(graphics, left + buttonWidth + 6, footerY, buttonWidth, 27, "SELECT TAB", TEAL, false);
+        drawButton(graphics, left + (buttonWidth + 6) * 2, footerY,
+                buttonWidth, 27, "QUEUE START", AMBER, false);
+        drawButton(graphics, left + (buttonWidth + 6) * 3, footerY,
+                buttonWidth, 27, "QUEUE STOP", RED, false);
     }
 
-    private int countArray(JsonObject object, String... keys) {
-        if (object == null) {
+    private int arraySize(JsonObject object, String key) {
+        if (object == null || !object.has(key) || !object.get(key).isJsonArray()) {
             return 0;
         }
 
-        for (String key : keys) {
-            JsonElement element = object.get(key);
-            if (element != null && element.isJsonArray()) {
-                return element.getAsJsonArray().size();
+        return object.getAsJsonArray(key).size();
+    }
+
+    private JsonObject findById(List<JsonObject> source, int id) {
+        for (JsonObject item : source) {
+            if (readNumber(item, "id") == id) {
+                return item;
             }
         }
 
-        return 0;
+        return null;
+    }
+
+    private void clickNavigation(double mouseX, double mouseY) {
+        int gap = 5;
+        int navWidth = (frameWidth - 36 - gap * 4) / 5;
+        int navHeight = 22;
+
+        for (int row = 0; row < NAVIGATION.length; row++) {
+            int navY = frameY + 47 + row * 25;
+            for (int column = 0; column < NAVIGATION[row].length; column++) {
+                int x = frameX + 18 + column * (navWidth + gap);
+                if (inside(mouseX, mouseY, x, navY, navWidth, navHeight)) {
+                    selectPage(Page.values()[row * 5 + column]);
+                    return;
+                }
+            }
+        }
     }
 
     @Override
@@ -597,18 +983,10 @@ public final class SkuaConsoleScreen extends Screen {
             return super.mouseClicked(mouseX, mouseY, button);
         }
 
-        int gap = 4;
-        int navY = frameY + 49;
-        int navWidth = (frameWidth - 36 - gap * 4) / 5;
-        Page[] pages = Page.values();
-
-        for (int i = 0; i < pages.length; i++) {
-            int x = frameX + 18 + i * (navWidth + gap);
-
-            if (inside(mouseX, mouseY, x, navY, navWidth, 25)) {
-                selectPage(pages[i]);
-                return true;
-            }
+        clickNavigation(mouseX, mouseY);
+        if (page == Page.CHAT && chatInput.mouseClicked(mouseX, mouseY, button)) {
+            chatInput.setFocused(true);
+            return true;
         }
 
         if (!inside(mouseX, mouseY, contentX, contentY, contentWidth, contentHeight)) {
@@ -620,6 +998,11 @@ public final class SkuaConsoleScreen extends Screen {
             case SCRIPTS -> clickScripts(mouseX, mouseY);
             case CONTROLS -> clickControls(mouseX, mouseY);
             case INVENTORY -> clickInventory(mouseX, mouseY);
+            case QUESTS -> clickQuests(mouseX, mouseY);
+            case DROPS -> clickDrops(mouseX, mouseY);
+            case CHAT -> clickChat(mouseX, mouseY);
+            case LOGS -> clickLogs(mouseX, mouseY);
+            case OPTIONS -> clickOptions(mouseX, mouseY);
             case FLEET -> clickFleet(mouseX, mouseY);
         }
 
@@ -628,9 +1011,9 @@ public final class SkuaConsoleScreen extends Screen {
 
     private void clickDashboard(double mouseX, double mouseY) {
         int left = contentX + 15;
-        int y = contentY + contentHeight - 43;
+        int y = contentY + contentHeight - 41;
         int buttonWidth = (contentWidth - 42) / 3;
-        JsonObject request = emptyBody();
+        JsonObject request = new JsonObject();
 
         if (inside(mouseX, mouseY, left, y, buttonWidth, 27)) {
             if (!selectedScriptPath.isBlank()) {
@@ -646,15 +1029,13 @@ public final class SkuaConsoleScreen extends Screen {
 
     private void clickScripts(double mouseX, double mouseY) {
         int left = contentX + 15;
-        int rowTop = contentY + 15 + 34;
-        int rowHeight = 25;
-        int visibleRows = Math.max(1, (contentHeight - 115) / 28);
-        int end = Math.min(scripts.size(), scriptOffset + visibleRows);
+        int rowTop = contentY + 13 + 34;
+        int rows = visibleRows(96);
+        int end = Math.min(scripts.size(), listOffset + rows);
 
-        for (int i = scriptOffset; i < end; i++) {
-            int y = rowTop + (i - scriptOffset) * 28;
-
-            if (inside(mouseX, mouseY, left, y, contentWidth - 30, rowHeight)) {
+        for (int i = listOffset; i < end; i++) {
+            int y = rowTop + (i - listOffset) * 27;
+            if (inside(mouseX, mouseY, left, y, contentWidth - 30, 24)) {
                 JsonObject selected = scripts.get(i);
                 selectedScriptPath = readString(selected, "path", "");
                 notice = "Selected: " + readString(selected, "name", selectedScriptPath);
@@ -662,7 +1043,7 @@ public final class SkuaConsoleScreen extends Screen {
             }
         }
 
-        int y = contentY + contentHeight - 43;
+        int y = contentY + contentHeight - 41;
         int buttonWidth = (contentWidth - 42) / 3;
 
         if (inside(mouseX, mouseY, left, y, buttonWidth, 27)) {
@@ -680,7 +1061,7 @@ public final class SkuaConsoleScreen extends Screen {
             return;
         }
 
-        JsonObject request = emptyBody();
+        JsonObject request = new JsonObject();
         request.addProperty("path", selectedScriptPath);
         post(start ? "/api/scripts/start" : "/api/scripts/load", request);
     }
@@ -691,17 +1072,17 @@ public final class SkuaConsoleScreen extends Screen {
         int rowY = contentY + 15 + 49;
 
         if (inside(mouseX, mouseY, left, rowY, buttonWidth, 34)) {
-            post("/api/combat/attack", emptyBody());
+            post("/api/combat/attack", new JsonObject());
             return;
         }
 
         if (inside(mouseX, mouseY, left + buttonWidth + 6, rowY, buttonWidth, 34)) {
-            post("/api/player/rest", emptyBody());
+            post("/api/player/rest", new JsonObject());
             return;
         }
 
         if (inside(mouseX, mouseY, left + (buttonWidth + 6) * 2, rowY, buttonWidth, 34)) {
-            JsonObject request = emptyBody();
+            JsonObject request = new JsonObject();
             request.addProperty("cell", "Enter");
             request.addProperty("pad", "Spawn");
             post("/api/player/jump", request);
@@ -710,12 +1091,10 @@ public final class SkuaConsoleScreen extends Screen {
 
         int skillWidth = (contentWidth - 30 - 24) / 5;
         int skillY = rowY + 52;
-
         for (int i = 0; i < 5; i++) {
             int x = left + i * (skillWidth + 6);
-
             if (inside(mouseX, mouseY, x, skillY, skillWidth, 37)) {
-                post("/api/combat/skill/" + (i + 1), emptyBody());
+                post("/api/combat/skill/" + (i + 1), new JsonObject());
                 return;
             }
         }
@@ -723,43 +1102,242 @@ public final class SkuaConsoleScreen extends Screen {
 
     private void clickInventory(double mouseX, double mouseY) {
         int left = contentX + 15;
-        int y = contentY + contentHeight - 43;
-        int buttonWidth = (contentWidth - 42) / 3;
+        int rowTop = contentY + 13 + 34;
+        List<JsonObject> items = showBank ? bankItems : inventoryItems;
+        int rows = visibleRows(96);
+        int end = Math.min(items.size(), listOffset + rows);
+
+        for (int i = listOffset; i < end; i++) {
+            int y = rowTop + (i - listOffset) * 26;
+            if (inside(mouseX, mouseY, left, y, contentWidth - 30, 23)) {
+                JsonObject selected = items.get(i);
+                selectedItemId = readNumber(selected, "id");
+                selectedItemName = readString(selected, "name", "");
+                notice = "Selected: " + selectedItemName;
+                return;
+            }
+        }
+
+        int y = contentY + contentHeight - 41;
+        int buttonWidth = (contentWidth - 54) / 4;
 
         if (inside(mouseX, mouseY, left, y, buttonWidth, 27)) {
             refreshInventory();
         } else if (inside(mouseX, mouseY, left + buttonWidth + 6, y, buttonWidth, 27)) {
-            post("/api/bank/open", emptyBody());
+            if (showBank) {
+                refreshBank();
+            } else {
+                refreshBank();
+            }
         } else if (inside(mouseX, mouseY, left + (buttonWidth + 6) * 2, y, buttonWidth, 27)) {
-            post("/api/bank/load", emptyBody());
-            refreshBank();
+            if (showBank) {
+                notice = "Equip is only available for items in your bag.";
+            } else if (selectedItemId > 0) {
+                JsonObject request = new JsonObject();
+                request.addProperty("id", selectedItemId);
+                post("/api/inventory/equip", request);
+            } else {
+                notice = "Select a bag item first.";
+            }
+        } else if (inside(mouseX, mouseY, left + (buttonWidth + 6) * 3, y, buttonWidth, 27)) {
+            if (selectedItemId <= 0) {
+                notice = "Select an item first.";
+                return;
+            }
+
+            JsonObject request = new JsonObject();
+            request.addProperty("id", selectedItemId);
+            post(showBank ? "/api/inventory/unbank" : "/api/inventory/bank", request);
+        }
+    }
+
+    private void clickQuests(double mouseX, double mouseY) {
+        int left = contentX + 15;
+        int top = contentY + 13;
+        int listWidth = (contentWidth - 42) / 2;
+        int rowTop = top + 34;
+        int rows = visibleRows(82);
+        int end = Math.min(quests.size(), listOffset + rows);
+
+        for (int i = listOffset; i < end; i++) {
+            int y = rowTop + (i - listOffset) * 26;
+            if (inside(mouseX, mouseY, left, y, listWidth, 23)) {
+                selectedQuestId = readNumber(quests.get(i), "id");
+                return;
+            }
+        }
+
+        int y = contentY + contentHeight - 41;
+        int buttonWidth = (contentWidth - 42) / 3;
+        if (inside(mouseX, mouseY, left, y, buttonWidth, 27)) {
+            refreshQuests();
+        } else if (inside(mouseX, mouseY, left + buttonWidth + 6, y, buttonWidth, 27)) {
+            JsonObject selected = findById(quests, selectedQuestId);
+            if (selected == null) {
+                notice = "Select a quest first.";
+            } else if (!readBoolean(selected, "can_complete", false)) {
+                notice = "Quest requirements are not complete yet.";
+            } else {
+                JsonObject request = new JsonObject();
+                request.addProperty("id", selectedQuestId);
+                post("/api/quests/complete", request);
+            }
+        }
+    }
+
+    private void clickDrops(double mouseX, double mouseY) {
+        int left = contentX + 15;
+        int rowTop = contentY + 13 + 34;
+        int rows = visibleRows(90);
+        int end = Math.min(drops.size(), listOffset + rows);
+
+        for (int i = listOffset; i < end; i++) {
+            int y = rowTop + (i - listOffset) * 27;
+            if (inside(mouseX, mouseY, left, y, contentWidth - 30, 24)) {
+                selectedDrop = drops.get(i);
+                notice = "Selected drop: " + selectedDrop;
+                return;
+            }
+        }
+
+        int y = contentY + contentHeight - 41;
+        int buttonWidth = (contentWidth - 42) / 3;
+        if (inside(mouseX, mouseY, left, y, buttonWidth, 27)) {
+            refreshDrops();
+        } else if (inside(mouseX, mouseY, left + buttonWidth + 6, y, buttonWidth, 27)) {
+            if (selectedDrop.isBlank()) {
+                notice = "Select a drop first.";
+                return;
+            }
+            JsonObject request = new JsonObject();
+            request.addProperty("item", selectedDrop);
+            post("/api/drops/pickup", request);
+        } else if (inside(mouseX, mouseY, left + (buttonWidth + 6) * 2, y, buttonWidth, 27)) {
+            post("/api/drops/pickup-all", new JsonObject());
+        }
+    }
+
+    private void clickChat(double mouseX, double mouseY) {
+        int y = contentY + contentHeight - 42;
+        int x = contentX + contentWidth - 91;
+        if (!inside(mouseX, mouseY, x, y, 76, 27)) {
+            return;
+        }
+
+        String message = chatInput.getValue().trim();
+        if (message.isBlank()) {
+            notice = "Type a message first.";
+            return;
+        }
+
+        JsonObject request = new JsonObject();
+        request.addProperty("message", message);
+        request.addProperty("type", "zone");
+        post("/api/chat/send", request);
+        chatInput.setValue("");
+    }
+
+    private void clickLogs(double mouseX, double mouseY) {
+        int left = contentX + 15;
+        int y = contentY + contentHeight - 41;
+        if (inside(mouseX, mouseY, left, y, 132, 27)) {
+            refreshLogs();
+        }
+    }
+
+    private void clickOptions(double mouseX, double mouseY) {
+        int left = contentX + 15;
+        int top = contentY + 14;
+        int gap = 8;
+        int columns = 3;
+        int buttonWidth = (contentWidth - 30 - gap * (columns - 1)) / columns;
+
+        for (int i = 0; i < OPTION_FIELDS.length; i++) {
+            int column = i % columns;
+            int row = i / columns;
+            int x = left + column * (buttonWidth + gap);
+            int y = top + 43 + row * 39;
+            if (inside(mouseX, mouseY, x, y, buttonWidth, 31)) {
+                String optionName = OPTION_FIELDS[i][0];
+                String optionKey = OPTION_FIELDS[i][1];
+                boolean enabled = readBoolean(options, optionKey, false);
+
+                JsonObject request = new JsonObject();
+                request.addProperty("option", optionName);
+                request.addProperty("value", !enabled);
+                post("/api/options/toggle", request);
+                return;
+            }
         }
     }
 
     private void clickFleet(double mouseX, double mouseY) {
         int left = contentX + 15;
-        int y = contentY + contentHeight - 43;
-        int buttonWidth = (contentWidth - 42) / 3;
+        int top = contentY + 13;
+        int listWidth = (contentWidth - 42) / 2;
+        int rowTop = top + 34;
+        int rows = visibleRows(100);
+        int end = Math.min(tabs.size(), listOffset + rows);
+
+        for (int i = listOffset; i < end; i++) {
+            int y = rowTop + (i - listOffset) * 25;
+            if (inside(mouseX, mouseY, left, y, listWidth, 22)) {
+                selectedPid = readNumber(tabs.get(i), "pid");
+                notice = "Selected tab PID " + selectedPid;
+                return;
+            }
+        }
+
+        int y = contentY + contentHeight - 41;
+        int buttonWidth = (contentWidth - 54) / 4;
 
         if (inside(mouseX, mouseY, left, y, buttonWidth, 27)) {
             refreshFleet();
-            SkuaApiClient.get("/api/tabs", result -> notice = "Tab list response received.");
         } else if (inside(mouseX, mouseY, left + buttonWidth + 6, y, buttonWidth, 27)) {
-            post("/api/army/queue/start", emptyBody());
+            if (selectedPid <= 0) {
+                notice = "Select a client tab first.";
+                return;
+            }
+            JsonObject request = new JsonObject();
+            request.addProperty("pid", selectedPid);
+            post("/api/tabs/select", request);
         } else if (inside(mouseX, mouseY, left + (buttonWidth + 6) * 2, y, buttonWidth, 27)) {
-            post("/api/army/queue/stop", emptyBody());
+            post("/api/army/queue/start", new JsonObject());
+        } else if (inside(mouseX, mouseY, left + (buttonWidth + 6) * 3, y, buttonWidth, 27)) {
+            post("/api/army/queue/stop", new JsonObject());
         }
+    }
+
+    private JsonObject findById(List<JsonObject> source, int id) {
+        for (JsonObject item : source) {
+            if (readNumber(item, "id") == id) {
+                return item;
+            }
+        }
+
+        return null;
     }
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
-        if (page != Page.SCRIPTS) {
-            return super.mouseScrolled(mouseX, mouseY, delta);
+        int maxOffset = 0;
+
+        switch (page) {
+            case SCRIPTS -> maxOffset = Math.max(0, scripts.size() - visibleRows(96));
+            case INVENTORY -> maxOffset = Math.max(0,
+                    (showBank ? bankItems.size() : inventoryItems.size()) - visibleRows(96));
+            case QUESTS -> maxOffset = Math.max(0, quests.size() - visibleRows(82));
+            case DROPS -> maxOffset = Math.max(0, drops.size() - visibleRows(90));
+            case CHAT -> maxOffset = Math.max(0, chatMessages.size() - visibleRows(92));
+            case LOGS -> maxOffset = Math.max(0, logs.size() - visibleRows(74));
+            case FLEET -> maxOffset = Math.max(0, tabs.size() - visibleRows(100));
+            default -> {
+                return super.mouseScrolled(mouseX, mouseY, delta);
+            }
         }
 
-        int visibleRows = Math.max(1, (contentHeight - 115) / 28);
-        int maxOffset = Math.max(0, scripts.size() - visibleRows);
-        scriptOffset = Math.max(0, Math.min(maxOffset, scriptOffset - (int) Math.signum(delta) * 2));
+        listOffset = Math.max(0, Math.min(maxOffset,
+                listOffset - (int) Math.signum(delta) * 2));
         return true;
     }
 }
