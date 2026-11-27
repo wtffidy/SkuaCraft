@@ -23,6 +23,7 @@ public final class SkuaPlayerScreen extends Screen {
     private static final int MUTED = 0xFF91A5B4;
     private static final int RED = 0xFFFF777D;
 
+    private final SkuaToolsPanel toolsPanel = new SkuaToolsPanel();
     private RinkuBrowser browser;
     private String pageUrl = "";
     private String status = "Starting Skua player...";
@@ -75,10 +76,13 @@ public final class SkuaPlayerScreen extends Screen {
 
             hostReady = result.success();
             if (!hostReady) {
+                PlayerControlClient.disconnect();
                 status = result.message();
                 return;
             }
 
+            PlayerControlClient.connect(result.controlUrl(), result.controlToken());
+            toolsPanel.refresh();
             pageUrl = result.pageUrl();
             status = rinkuReady ? "PLAYER CORE READY  /  OPENING GAME" : "PLAYER CORE READY  /  WAITING FOR RINKU";
             tryOpenPlayer();
@@ -163,6 +167,9 @@ public final class SkuaPlayerScreen extends Screen {
         graphics.drawString(font, "SKUA SYSTEMS  /  HANDHELD PLAYER", 21, 20, TEAL, false);
         graphics.drawString(font, "RINKU  " + (rinkuReady ? "READY" : "STARTING"),
                 width - 170, 20, rinkuReady ? TEAL : MUTED, false);
+        graphics.fill(width - 83, 12, width - 12, 34, toolsPanel.isOpen() ? TEAL_DARK : 0xFF233447);
+        graphics.drawCenteredString(font, toolsPanel.isOpen() ? "HIDE TOOLS" : "TOOLS  F6",
+                width - 47, 20, TEXT);
 
         if (browser != null && browser.isTextureReady()) {
             ResourceLocation texture = browser.getTextureIdentifier();
@@ -188,6 +195,7 @@ public final class SkuaPlayerScreen extends Screen {
                 status.contains("ERROR") || status.contains("FAILED") || status.contains("missing") ? RED : MUTED, false);
         graphics.drawString(font, "ESC  HIDE", width - 88, height - 25, VIOLET, false);
 
+        toolsPanel.render(graphics, font, width, height, mouseX, mouseY);
         super.render(graphics, mouseX, mouseY, partialTick);
     }
 
@@ -229,6 +237,15 @@ public final class SkuaPlayerScreen extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (button == 0 && mouseY >= 12 && mouseY <= 34 && mouseX >= width - 83 && mouseX <= width - 12) {
+            toolsPanel.toggle(width, height);
+            return true;
+        }
+
+        if (toolsPanel.mouseClicked(mouseX, mouseY, button, width, height)) {
+            return true;
+        }
+
         if (browser == null || !browser.isTextureReady() || !isInsideBrowser(mouseX, mouseY)) {
             return super.mouseClicked(mouseX, mouseY, button);
         }
@@ -240,6 +257,11 @@ public final class SkuaPlayerScreen extends Screen {
 
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
+        if (toolsPanel.isPointerOver(mouseX, mouseY, width, height)
+                || mouseY >= 12 && mouseY <= 34 && mouseX >= width - 83 && mouseX <= width - 12) {
+            return true;
+        }
+
         if (browser != null) {
             browser.sendMouseRelease(browserMouseX(mouseX), browserMouseY(mouseY), button);
             browser.setFocus(true);
@@ -251,6 +273,12 @@ public final class SkuaPlayerScreen extends Screen {
 
     @Override
     public void mouseMoved(double mouseX, double mouseY) {
+        if (toolsPanel.isPointerOver(mouseX, mouseY, width, height)
+                || mouseY >= 12 && mouseY <= 34 && mouseX >= width - 83 && mouseX <= width - 12) {
+            super.mouseMoved(mouseX, mouseY);
+            return;
+        }
+
         if (browser != null && isInsideBrowser(mouseX, mouseY)) {
             browser.sendMouseMove(browserMouseX(mouseX), browserMouseY(mouseY));
         }
@@ -260,6 +288,10 @@ public final class SkuaPlayerScreen extends Screen {
 
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
+        if (toolsPanel.isPointerOver(mouseX, mouseY, width, height)) {
+            return true;
+        }
+
         if (browser != null) {
             browser.sendMouseMove(browserMouseX(mouseX), browserMouseY(mouseY));
             return true;
@@ -270,6 +302,10 @@ public final class SkuaPlayerScreen extends Screen {
 
     @Override
     public boolean mouseScrolled(double mouseX, double mouseY, double delta) {
+        if (toolsPanel.mouseScrolled(mouseX, mouseY, delta, width, height)) {
+            return true;
+        }
+
         if (browser != null && isInsideBrowser(mouseX, mouseY)) {
             browser.sendMouseWheel(browserMouseX(mouseX), browserMouseY(mouseY), delta, 0);
             return true;
@@ -284,6 +320,15 @@ public final class SkuaPlayerScreen extends Screen {
             return super.keyPressed(keyCode, scanCode, modifiers);
         }
 
+        if (keyCode == GLFW.GLFW_KEY_F6) {
+            toolsPanel.toggle(width, height);
+            return true;
+        }
+
+        if (toolsPanel.isOpen()) {
+            return true;
+        }
+
         if (browser != null) {
             browser.sendKeyPress(keyCode, scanCode, modifiers);
             browser.setFocus(true);
@@ -295,6 +340,10 @@ public final class SkuaPlayerScreen extends Screen {
 
     @Override
     public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
+        if (toolsPanel.isOpen()) {
+            return true;
+        }
+
         if (browser != null) {
             browser.sendKeyRelease(keyCode, scanCode, modifiers);
             browser.setFocus(true);
@@ -306,6 +355,10 @@ public final class SkuaPlayerScreen extends Screen {
 
     @Override
     public boolean charTyped(char codePoint, int modifiers) {
+        if (toolsPanel.isOpen()) {
+            return true;
+        }
+
         if (browser != null && codePoint != 0) {
             browser.sendKeyTyped(codePoint, modifiers);
             browser.setFocus(true);

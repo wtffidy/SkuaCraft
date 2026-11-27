@@ -148,12 +148,18 @@ public final class PlayerHostLauncher {
 
             JsonObject session = parsed.getAsJsonObject();
             String pageUrl = string(session, "pageUrl");
+            String controlUrl = string(session, "controlUrl");
+            String controlToken = string(session, "controlToken");
 
             if (!isSafeLoopbackUrl(pageUrl)) {
                 return LaunchResult.failed("The player host returned a URL that is not a loopback address.");
             }
 
-            return LaunchResult.ready(pageUrl);
+            if (!isSafeLoopbackControlUrl(controlUrl) || controlToken.length() < 32) {
+                return LaunchResult.failed("The player host returned an invalid control session.");
+            }
+
+            return LaunchResult.ready(pageUrl, controlUrl, controlToken);
         } catch (IOException | RuntimeException exception) {
             return LaunchResult.failed("Could not read the player host session: " + exception.getMessage());
         }
@@ -185,6 +191,24 @@ public final class PlayerHostLauncher {
                     && uri.getPort() > 0
                     && uri.getRawPath() != null
                     && uri.getRawPath().length() > 2;
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
+    }
+
+    private static boolean isSafeLoopbackControlUrl(String value) {
+        if (value == null || value.isBlank()) {
+            return false;
+        }
+
+        try {
+            URI uri = URI.create(value);
+            String host = uri.getHost();
+
+            return "http".equalsIgnoreCase(uri.getScheme())
+                    && ("127.0.0.1".equals(host) || "localhost".equalsIgnoreCase(host))
+                    && uri.getPort() > 0
+                    && "/api/".equals(uri.getRawPath());
         } catch (IllegalArgumentException exception) {
             return false;
         }
@@ -242,13 +266,13 @@ public final class PlayerHostLauncher {
         }
     }
 
-    public record LaunchResult(boolean success, String pageUrl, String message) {
-        public static LaunchResult ready(String pageUrl) {
-            return new LaunchResult(true, pageUrl, "Player host ready");
+    public record LaunchResult(boolean success, String pageUrl, String controlUrl, String controlToken, String message) {
+        public static LaunchResult ready(String pageUrl, String controlUrl, String controlToken) {
+            return new LaunchResult(true, pageUrl, controlUrl, controlToken, "Player host ready");
         }
 
         public static LaunchResult failed(String message) {
-            return new LaunchResult(false, "", message);
+            return new LaunchResult(false, "", "", "", message);
         }
     }
 }
