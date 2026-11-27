@@ -50,6 +50,7 @@ public static class Program
             );
 
             Ioc.Default.ConfigureServices(serviceProvider);
+            Console.WriteLine($"[Runtime] PlayerHost is limited to {Environment.ProcessorCount} logical processors.");
 
             IClientFilesService clientFiles = serviceProvider.GetRequiredService<IClientFilesService>();
             clientFiles.CreateDirectories();
@@ -67,6 +68,13 @@ public static class Program
             IGetScriptsService scriptCatalogue = serviceProvider.GetRequiredService<IGetScriptsService>();
             RuffleFlashUtil flash = serviceProvider.GetRequiredService<RuffleFlashUtil>();
             RuffleHost playerHost = serviceProvider.GetRequiredService<RuffleHost>();
+            string rufflePortFile = GetRufflePortFilePath(sessionFile);
+            int savedRufflePort = ReadRufflePort(rufflePortFile);
+            if (savedRufflePort > 0)
+            {
+                playerHost.Options.Port = savedRufflePort;
+                Console.WriteLine($"[Ruffle] Reusing persistent player origin port {savedRufflePort}.");
+            }
 
             ApplyRuffleScalingPatch(playerHost);
             playerHost.Control.PageLog += message =>
@@ -84,6 +92,8 @@ public static class Program
 
             botManager.Initialize();
             flash.InitializeFlash();
+            SaveRufflePort(rufflePortFile, playerHost.Port);
+            Console.WriteLine($"[Ruffle] Persistent player origin port is {playerHost.Port}.");
 
             await using PlayerControlServer controlServer = new(bot, scriptManager, scriptCatalogue);
             controlServer.Start();
@@ -335,6 +345,53 @@ public static class Program
         services.AddSingleton<IPluginManager, PluginManager>();
         // PluginManager constructs PluginContainer with the discovered plugin instance.
         // Registering the container itself makes DI validate a phantom ISkuaPlugin dependency.
+    }
+
+    private static string GetRufflePortFilePath(string sessionFile)
+    {
+        string? directory = Path.GetDirectoryName(sessionFile);
+        return Path.Combine(
+            string.IsNullOrWhiteSpace(directory) ? AppContext.BaseDirectory : directory,
+            "ruffle-port.txt"
+        );
+    }
+
+    private static int ReadRufflePort(string path)
+    {
+        try
+        {
+            return int.TryParse(File.ReadAllText(path).Trim(), out int port)
+                && port is >= 1024 and <= 65535
+                ? port
+                : 0;
+        }
+        catch (IOException)
+        {
+            return 0;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return 0;
+        }
+    }
+
+    private static void SaveRufflePort(string path, int port)
+    {
+        if (port is < 1024 or > 65535)
+        {
+            return;
+        }
+
+        string? directory = Path.GetDirectoryName(path);
+        if (string.IsNullOrWhiteSpace(directory))
+        {
+            return;
+        }
+
+        Directory.CreateDirectory(directory);
+        string temporaryPath = path + ".tmp";
+        File.WriteAllText(temporaryPath, port.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        File.Move(temporaryPath, path, true);
     }
 
     private static string? GetArgument(string[] args, string name)
