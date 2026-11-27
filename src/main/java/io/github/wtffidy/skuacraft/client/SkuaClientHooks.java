@@ -10,6 +10,6 @@ public final class SkuaClientHooks {
     }
 
     public static void openConsole() {
-        Minecraft.getInstance().setScreen(new SkuaConsoleScreen());
+        Minecraft.getInstance().setScreen(new SkuaPlayerScreen());
     }
 }

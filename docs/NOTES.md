@@ -1,135 +1,79 @@
 # 🥔 SkuaCraft field notes
 
-> **Product definition:** a real AQW + Skua player hosted inside Minecraft, presented as an in-world handheld console.
+> **Product definition:** the actual AQW client and Skua runtime, played inside Minecraft through a handheld console.
 
 ## 01 · Non-negotiable definition
 
-SkuaCraft must run the actual AQW game client and the actual Skua runtime in the Minecraft client experience.
+A remote-control dashboard for a separate desktop Skua process is not the product. The handheld must display the real game, run the Skua runtime and eventually expose Skua's normal tools within Minecraft.
 
-A dashboard that sends HTTP commands to a separate desktop VibeSkua window does **not** satisfy the goal. The old remote-control panels are a prototype and are not the final architecture.
+## 02 · Implemented integration foundation
 
-The player must support the real game loop: load the SWF, connect to AQW, log in, render the game, receive mouse/keyboard input, expose Skua's game APIs to the bot runtime, and run scripts from inside Minecraft.
+- [x] Forge 1.20.1 project and craftable Skua Console
+- [x] Rinku 3.0.4 dependency for Forge 1.20.1
+- [x] Minecraft browser screen that renders the Rinku texture and forwards input
+- [x] Persistent browser session when the console is hidden and reopened
+- [x] Player-host launcher with a loopback session file and stop-file lifecycle
+- [x] MVS v1.0.6 pinned Git submodule
+- [x] .NET 10 host project referencing Skua Core and Skua.Flash.Ruffle
+- [x] Headless Skua settings, dialog and dispatcher adapters
+- [x] Skua client-file and plugin service registrations
 
-## 02 · Runtime investigation
+These are source-level integration steps. They are not a claim that the actual AQW login/gameplay path has passed a live Minecraft test yet.
 
-### Desktop VibeSkua
+## 03 · Player architecture
 
-The current desktop app uses an Avalonia native host around the Windows Shockwave Flash ActiveX/WinForms control. That host is Windows-specific and cannot be moved directly into Minecraft's Java/Forge process.
-
-Reference files:
-- [WinFormsFlashHost.cs](https://github.com/wtffidy/VibeSkua/blob/main/Skua.App.Avalonia/Controls/WinFormsFlashHost.cs)
-- [Skua.App.Avalonia.csproj](https://github.com/wtffidy/VibeSkua/blob/main/Skua.App.Avalonia/Skua.App.Avalonia.csproj)
-
-### MVS v1.0.6
-
-MVS contains the practical portable route:
-
-- `Skua.Flash.Ruffle` is a .NET 10 library implementing `IFlashUtil`.
-- `RuffleHost` serves the local HTML/JavaScript/Ruffle WebAssembly assets and the `skua.swf`.
-- The host proxies AQW HTTP requests and WebSocket game sockets.
-- `ControlChannel` bridges Ruffle's JavaScript ExternalInterface calls to .NET.
-- `RuffleFlashUtil` connects that bridge to Skua Core, so Skua scripts continue to use the real game model and interfaces.
-- The Android app displays the player through Android WebView, but that Android UI itself is not the target to port.
-
-Source: [Arglax/MVS v1.0.6](https://github.com/Arglax/MVS/tree/v1.0.6).
-
-## 03 · Intended architecture
-
-| Component | Responsibility |
+| Layer | Responsibility |
 | --- | --- |
-| Minecraft Forge mod | Item, first-person handheld, Minecraft screens, navigation and key bindings |
-| Rinku browser view | Render the local Ruffle player inside Minecraft and forward input |
-| Ruffle page | Run the AQW SWF using WebAssembly/WebGL |
-| .NET 10 player host | Local Ruffle HTTP/WebSocket host and Skua runtime |
-| Skua Core | Game state, scripts, automation, client options, inventory, quests and other bot interfaces |
-| Script catalogue | Existing script metadata and sources; no new script-generation system |
+| Minecraft Forge | Item, handheld screen, navigation and user input |
+| Rinku | Embedded Chromium surface rendered to Minecraft |
+| Ruffle | Flash SWF renderer running in WebAssembly |
+| MVS Skua.Flash.Ruffle | Player host, AQW proxy, ExternalInterface bridge |
+| Skua Core | Live game state, bot APIs and C# script runtime |
+| Script repository | Source and category reference only |
 
-The .NET player host is started as a hidden child process by SkuaCraft. It is not a second visible Skua window. The Minecraft client owns the visible presentation and input experience.
+The .NET host runs hidden beside the game. There is no separate desktop Skua game window in this design.
 
-### Local connection rules
+## 04 · Remaining proof-of-concept checks
 
-- Bind all player-host endpoints to loopback only.
-- Use a random per-session token for the Ruffle page and control websocket.
-- Do not expose the player host to the local network.
-- Do not save account credentials in Minecraft config or logs.
-- Keep game networking and bot execution in the Skua runtime, not in Minecraft's render thread.
+- [ ] Build the Java mod with the Rinku library.
+- [ ] Build the .NET 10 sidecar against the pinned MVS submodule.
+- [ ] Install both artifacts in Project Infinity 0.1.
+- [ ] Confirm the Rinku browser initializes on the target PC.
+- [ ] Confirm Ruffle loads the Skua SWF and reaches the AQW login screen.
+- [ ] Verify login, map loading, mouse, keyboard, audio and WebSocket proxy.
+- [ ] Confirm live game state reaches Skua Core.
+- [ ] Run an existing script from the in-game Skua tools.
+- [ ] Hide and reopen the handheld without killing the game session.
 
-## 04 · Browser integration candidate
+## 05 · Full Skua feature surface
 
-**Preferred:** Rinku, Forge 1.20.1 library release 3.0.4.
+Once the game loop is proved, the Minecraft-native Skua shell should expose:
 
-Rinku is a maintained Chromium/JCEF browser library and supports a controllable browser rendered into Minecraft. Its project documentation lists Windows, macOS and Linux x64/ARM64 support and Chromium 151.0.7922.34.
+- Script discovery, categories, search, load, run, pause and stop.
+- Auto/Hunt and combat controls.
+- Map travel, player and server controls.
+- Inventory, bank, drops and quest turn-ins.
+- Chat, logs, client options, packets and diagnostics.
+- Existing plugin and multi-account features where supported by the headless host.
 
-**Fallback:** MCEF 2.1.6 for Forge 1.20.1. Its example API exposes a browser texture ID and mouse/keyboard input forwarding, which is the exact integration surface needed for the first proof of concept.
+SkuaCraft will not generate or author AQW scripts. The existing script workflow and repository remain the source.
 
-The initial proof of concept must verify that the bundled Ruffle page works correctly in the selected browser engine, especially WebAssembly, WebGL, game audio, clipboard/keyboard input, cookies and the AQW socket proxy.
+## 06 · Handheld theatre
 
-## 05 · The handheld experience
+- [ ] First-person two-hand console pose with visible arms.
+- [ ] Screen bezel and proper perspective in the held view.
+- [ ] Device opening/closing transitions.
+- [ ] Button press feedback and subtle screen glow.
+- [ ] Optional compact player HUD and expanded tool view.
 
-### Physical presentation
+## 07 · Release hardening
 
-- Craftable, one-stack Skua Console.
-- A convincing first-person held device with visible hands/arms.
-- Device screen displays the live AQW player, not an imitation dashboard.
-- Buttons and shell detail are modeled as physical hardware.
-- Opening the console brings the player into focus; closing it returns control to Minecraft.
-
-### In-game player layout
-
-- Main display: live AQW client.
-- Compact Skua rail: start/stop script, player status, key tools.
-- Full tool pages: script loader/repo, automation, inventory/bank, quests, drops, options, logs, packets and plugins.
-- Mouse/keyboard input is forwarded to the browser while the player is focused.
-- Minecraft input is restored on close, with no stuck keys or mouse buttons.
-
-The actual game view is the primary content. Skua tools are supporting controls around it, not the reverse.
-
-## 06 · Milestones
-
-### A — Browser/player proof of concept
-- [ ] Add Rinku (or MCEF fallback) as the in-game Chromium backend.
-- [ ] Port or host the MVS Ruffle HTTP/WebSocket service.
-- [ ] Load the bundled Skua SWF and display the AQW game inside a Minecraft screen.
-- [ ] Forward mouse, keyboard, wheel, focus and resize events.
-- [ ] Confirm real AQW login, world rendering, movement, chat and audio.
-
-### B — Real Skua runtime
-- [ ] Host Skua Core and `RuffleFlashUtil` in the bundled .NET 10 player process.
-- [ ] Connect the Ruffle ExternalInterface bridge to Skua Core.
-- [ ] Verify live `IScriptInterface` state while in the game.
-- [ ] Run an existing script from the script repository.
-- [ ] Add runtime lifecycle, crash recovery and clean shutdown.
-
-### C — Minecraft-native Skua tools
-- [ ] Script list, categories, search, load, start, pause and stop.
-- [ ] Auto/Hunt, combat options, player/map controls.
-- [ ] Inventory, bank, drops and quests.
-- [ ] Logs, options, chat, packets and advanced tools.
-- [ ] Multi-account and Army support where the runtime permits.
-
-### D — Handheld polish
-- [ ] First-person two-hand held console model/pose.
-- [ ] Live game texture on the handheld screen.
-- [ ] Device open/close animations and button feedback.
-- [ ] Resizable display modes and crisp high-DPI rendering.
-- [ ] Sound and subtle screen treatment.
-
-### E — Pack validation
-- [ ] Build against Project Infinity 0.1, Minecraft 1.20.1, Forge 47.4.28 and Java 17.
-- [ ] Test on the actual pack instance.
-- [ ] Test runtime download, offline startup, connection loss and player recovery.
-- [ ] Verify no server-side dependency is required for the client-only player.
-- [ ] Package the mod and bundled player host for installation.
-
-## 07 · Explicit non-goals
-
-- Do not make a separate desktop VibeSkua window the visible game player.
-- Do not stop at HTTP remote-control panels.
-- Do not emulate the AQW game world in Minecraft blocks/entities.
-- Do not rewrite Skua's bot engine in Java.
-- Do not create or author AQW scripts inside this project.
-- Do not port the Android UI wholesale; reuse its proven player/runtime pieces.
+- [ ] Windows x64 self-contained host package.
+- [ ] Clean install from mod + player-host artifacts.
+- [ ] Startup recovery and process cleanup.
+- [ ] Verify Rinku first-run download/cache behaviour.
+- [ ] Test on the exact Project Infinity instance and Forge build.
 
 ---
 
-**North star:** Minecraft is the console. The screen is the real game. Skua is the brain behind it.
+**North star:** Minecraft is the console. The screen is the real AQW client. Skua is the brain behind it.

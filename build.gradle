@@ -3,7 +3,7 @@ plugins {
 }
 
 group = 'io.github.wtffidy.skuacraft'
-version = '0.1.0-alpha.1'
+version = '0.1.0-alpha.2'
 
 base {
     archivesName = 'SkuaCraft'
@@ -43,8 +43,13 @@ minecraft {
     }
 }
 
+repositories {
+    maven { url = 'https://www.cursemaven.com' }
+}
+
 dependencies {
     minecraft 'net.minecraftforge:forge:1.20.1-47.4.28'
+    implementation fg.deobf('curse.maven:rinku-1366156:8745377')
 }
 
 tasks.named('processResources') {
@@ -56,7 +61,7 @@ tasks.named('processResources') {
         mod_license: 'All Rights Reserved',
         mod_version: project.version.toString(),
         mod_authors: 'wtffidy',
-        mod_description: 'A handheld VibeSkua control deck for Minecraft.'
+        mod_description: 'The real AQW and Skua player, hosted inside Minecraft.'
     ]
 
     inputs.properties replaceProperties

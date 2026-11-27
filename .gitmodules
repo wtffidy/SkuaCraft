@@ -1,0 +1,3 @@
+[submodule "vendor/MVS"]
+	path = vendor/MVS
+	url = https://github.com/Arglax/MVS.git

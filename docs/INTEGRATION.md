@@ -1,117 +1,62 @@
-# 🔌 VibeSkua integration reference
+# 🔌 Embedded player integration
 
-This document records the existing VibeSkua remote-control surface that SkuaCraft consumes. SkuaCraft is a client for the real Skua runtime, not a second bot engine.
+SkuaCraft hosts the real AQW + Skua runtime. It does not drive a separate VibeSkua desktop window through the old remote-control REST API.
 
-## Connection profile
+## Player stack
 
-| Setting | Default |
-| --- | --- |
-| Base URL | `http://127.0.0.1:8088` |
-| Health check | `GET /api/ping` |
-| Live snapshot | `GET /api/status` |
-| Script catalogue | `GET /api/scripts` |
-| Payload format | JSON |
-| Request model | Asynchronous HTTP |
+| Layer | Implementation | Responsibility |
+| --- | --- | --- |
+| Minecraft UI | Forge 1.20.1 | Handheld item, player screen, mouse and keyboard input |
+| Browser surface | Rinku 3.0.4 | Chromium view rendered to a Minecraft texture |
+| Flash player | Ruffle WebAssembly | Render the Skua SWF |
+| Player host | MVS Skua.Flash.Ruffle | Local page, HTTP/WS proxy, ExternalInterface bridge |
+| Bot runtime | MVS Skua.Core | Game state, script manager, automation and bot APIs |
 
-The VibeSkua host/manager gateway currently defaults to port 8088 and binds to all interfaces in its standard configuration. SkuaCraft therefore defaults to loopback and never silently scans the LAN.
+## Pinned runtime source
 
-**Network safety:** the inspected API surface does not establish an authentication contract. Do not port-forward the remote-control port or expose it to the public internet. Only configure another host when you deliberately intend to use a trusted private network.
+The repository pins [Arglax/MVS v1.0.6](https://github.com/Arglax/MVS/tree/v1.0.6) as the vendor/MVS Git submodule.
 
-## Verified endpoint map
+The embedded projects are:
 
-| Area | Method | Route | Purpose |
-| --- | --- | --- | --- |
-| Connection | GET | `/api/ping` | Server identity and version |
-| Status | GET | `/api/status` | Character, map, stats and script snapshot |
-| Scripts | GET | `/api/scripts` | Runtime script catalogue |
-| Scripts | POST | `/api/scripts/load` | Load a script |
-| Scripts | POST | `/api/scripts/start` | Start or resume a script |
-| Scripts | POST | `/api/scripts/pause` | Toggle pause state |
-| Scripts | POST | `/api/scripts/stop` | Stop the current script |
-| Movement | POST | `/api/player/jump` | Jump to a cell and pad |
-| Movement | POST | `/api/player/goto` | Go to a player |
-| Movement | POST | `/api/player/join` | Join a map |
-| Movement | POST | `/api/player/rest` | Rest |
-| Movement | POST | `/api/player/relog` | Relog |
-| Combat | POST | `/api/combat/attack` | Attack current target or all |
-| Combat | POST | `/api/combat/skill/1..5` | Use a skill |
-| Combat | POST | `/api/combat/cancel-target` | Clear target |
-| Drops | GET | `/api/drops` | Current drops |
-| Drops | POST | `/api/drops/pickup` | Pick up a drop |
-| Drops | POST | `/api/drops/pickup-all` | Pick up all drops |
-| Quests | GET | `/api/quests` | Active quests and requirements |
-| Quests | POST | `/api/quests/complete` | Complete a quest |
-| Inventory | GET | `/api/inventory` | Bag contents |
-| Inventory | POST | `/api/inventory/equip` | Equip an item |
-| Inventory | POST | `/api/inventory/bank` | Deposit an item |
-| Inventory | POST | `/api/inventory/unbank` | Withdraw an item |
-| Bank | GET | `/api/bank` | Bank contents |
-| Bank | POST | `/api/bank/open` | Open bank |
-| Bank | POST | `/api/bank/load` | Load bank data |
-| Options | GET | `/api/options` | Read options |
-| Options | POST | `/api/options/toggle` | Change an option |
-| Chat | GET | `/api/chat` | Recent chat messages |
-| Chat | POST | `/api/chat/send` | Send chat |
-| Logs | GET | `/api/logs` | Script logs |
-| Tabs | GET | `/api/tabs` | Running client tabs |
-| Tabs | POST | `/api/tabs/select` | Select a tab |
-| Fleet | GET | `/api/army/queue` | Army Queue state |
-| Fleet | POST | `/api/army/queue/start` | Start queue |
-| Fleet | POST | `/api/army/queue/stop` | Stop queue |
-| Fleet | POST | `/api/army/queue/pause` | Toggle queue pause |
+- Skua.Core: actual Skua interfaces and bot runtime.
+- Skua.Flash.Ruffle: IFlashUtil implementation, local Ruffle web host and ExternalInterface bridge.
+- Skua.AS3/skua/bin/skua.swf: Skua's Flash game client.
 
-VibeSkua also exposes manager/fleet operations for broadcasts, account launching and multi-tab control. Those are a later SkuaCraft milestone rather than features guessed into the first screen.
+SkuaCraft's player host is a small .NET 10 executable. It composes those projects with headless settings, dialog and dispatch services instead of starting the Avalonia desktop shell or its Windows ActiveX Flash control.
 
-## Payload examples
+## Session lifecycle
 
-Load or start a script:
+1. The player screen asks the player-host launcher to start or reuse the .NET process.
+2. The host creates the Skua Core dependency graph and the client file directories.
+3. RuffleFlashUtil.InitializeFlash() starts a loopback-only RuffleHost.
+4. The host writes a session file containing the tokenized page URL and process ID.
+5. Minecraft verifies that the page URL is loopback and opens it in Rinku.
+6. Ruffle loads the Skua SWF. Its requestLoadGame ExternalInterface event is routed to IFlashUtil.Call("loadClient").
+7. Ruffle's ExternalInterface bridge continues to deliver Flash calls to the live Skua ScriptInterface.
+8. Hiding the console releases browser focus but keeps the browser and Skua host alive. Reopening the console reuses that same browser session.
 
-```json
-{
-  "path": "Farm/GoldFarm.cs"
-}
-```
+## Network boundary
 
-Jump to a cell:
+- RuffleHost binds to 127.0.0.1; it is not exposed to the LAN.
+- Ruffle uses a random session token in the local page URL and WebSocket path.
+- The Minecraft side rejects player URLs that are not loopback HTTP URLs.
+- Account credentials are not included in Minecraft config, session metadata or command-line arguments.
+- AQW game traffic goes through the Ruffle host's intended proxy routes.
 
-```json
-{
-  "cell": "Enter",
-  "pad": "Spawn"
-}
-```
+## Skua tools and scripts
 
-Toggle a client option:
+The .NET host initializes the real IScriptInterface, IScriptManager, inventory, bank, quests, drops, options and other Skua services. The next UI milestone is to expose those services through Minecraft-native panels.
 
-```json
-{
-  "option": "AutoRelogin",
-  "value": true
-}
-```
+Scripts-for-bullshit remains a source of script categories and metadata only. SkuaCraft does not generate or edit scripts. Existing Skua scripts will run through the pinned Skua Core script manager once script discovery and load controls are wired into the Minecraft UI.
 
-## Status fields used by the console
+## Verification gates
 
-The live snapshot uses snake_case keys. The first dashboard reads:
+The source integration is not considered complete until the following are tested in the actual Project Infinity client:
 
-- Identity: `app`, `version`, `username`, `level`
-- Character: `logged_in`, `playing`, `current_class`, `hp`, `max_hp`, `mp`, `max_mp`, `gold`
-- Location: `map`, `server`, `room_id`, `cell`, `pad`
-- Combat: `in_combat`, `has_target`, `target_name`, `target_hp`, `target_max_hp`
-- Script: `script_running`, `script_paused`, `script_status`, `loaded_script`, `loaded_script_path`
-- Progress: `kills`, `deaths`, `drops`, `quests_completed`, `uptime`
-- Storage: `inventory_used`, `inventory_max`, `bank_used`, `bank_max`, `bank_loaded`
-
-The script catalogue currently responds with an object containing a `scripts` array and a `count`. Entries include `name`, `fileName`, `path`, `category`, `description`, `tags`, `downloaded`, `size` and `last_modified`.
-
-## Script repository boundary
-
-SkuaCraft displays the script catalogue already exposed by VibeSkua. It does **not** author, generate, edit, compile or upload AQW scripts. The scripts repository is a source of category and metadata context; the desktop Skua workflow remains responsible for script acquisition and execution.
-
-## Source inspection
-
-- [VibeSkua RemoteControlService.cs](https://github.com/wtffidy/VibeSkua/blob/main/Skua.Core/Services/RemoteControlService.cs)
-- [VibeSkua Android controller](https://github.com/wtffidy/VibeSkua/tree/main/Skua.App.Android)
-- [Scripts-for-bullshit / Skua branch](https://github.com/wtffidy/Scripts-for-bullshit/tree/Skua)
-
-Re-check the desktop service before relying on undocumented fields or adding new actions. Endpoint behavior may evolve with VibeSkua.
+- Rinku initializes and displays the local Ruffle page.
+- Ruffle loads the Skua SWF and reaches the AQW login screen.
+- Login, map loading, movement, chat, audio and WebSocket reconnection work.
+- The live player state reaches Skua Core.
+- An existing script can be loaded and run from the in-game Skua tools.
+- Closing and reopening the handheld preserves the running player session.
+- Player-host crashes and Minecraft shutdown clean up the local process.

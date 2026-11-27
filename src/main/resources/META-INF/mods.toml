@@ -4,13 +4,12 @@ license="All Rights Reserved"
 
 [[mods]]
 modId="skuacraft"
-version="${mod_version}"
+version="\${mod_version}"
 displayName="SkuaCraft"
 displayURL="https://github.com/wtffidy/SkuaCraft"
 authors="wtffidy"
 description='''
-A handheld VibeSkua control deck for Minecraft.
-Craft the console, hold it and right-click to open the Skua interface.
+The real AdventureQuest Worlds game and Skua runtime, hosted inside a Minecraft handheld console.
 '''
 
 [[dependencies.skuacraft]]
@@ -26,3 +25,10 @@ mandatory=true
 versionRange="[1.20.1,1.20.2)"
 ordering="NONE"
 side="BOTH"
+
+[[dependencies.skuacraft]]
+modId="rinku"
+mandatory=true
+versionRange="[3.0.4,)"
+ordering="AFTER"
+side="CLIENT"

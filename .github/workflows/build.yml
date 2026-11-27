@@ -11,7 +11,8 @@ permissions:
   contents: read
 
 jobs:
-  build:
+  mod:
+    name: Build Minecraft mod
     runs-on: ubuntu-latest
     steps:
       - name: Check out source
@@ -24,17 +25,44 @@ jobs:
           java-version: '17'
           cache: gradle
 
-      - name: Set up Gradle
+      - name: Set up Gradle 8.8
         uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '8.8'
 
-      - name: Build with Gradle
+      - name: Build with ForgeGradle
         run: gradle build --no-daemon
 
       - name: Upload mod JAR
         uses: actions/upload-artifact@v4
         with:
-          name: SkuaCraft-${{ github.sha }}
+          name: SkuaCraft-Mod-\${{ github.sha }}
           path: build/libs/*.jar
+          if-no-files-found: error
+
+  player-host:
+    name: Build Windows Skua player host
+    runs-on: windows-latest
+    steps:
+      - name: Check out source and MVS runtime
+        uses: actions/checkout@v7
+        with:
+          submodules: recursive
+
+      - name: Set up .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Publish self-contained Windows player host
+        shell: pwsh
+        run: |
+          dotnet publish .\\player-host\\SkuaCraft.PlayerHost.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=false -o .\\player-host\\publish\\win-x64
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload player host
+        uses: actions/upload-artifact@v4
+        with:
+          name: SkuaCraft-PlayerHost-win-x64-\${{ github.sha }}
+          path: player-host/publish/win-x64/**
           if-no-files-found: error

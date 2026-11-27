@@ -4,28 +4,20 @@ import net.minecraftforge.common.ForgeConfigSpec;
 import net.minecraftforge.fml.ModLoadingContext;
 import net.minecraftforge.fml.config.ModConfig;
 
+import java.nio.file.Path;
+
 public final class SkuaCraftConfig {
     private static final ForgeConfigSpec.Builder BUILDER = new ForgeConfigSpec.Builder();
 
-    public static final ForgeConfigSpec.ConfigValue<String> HOST;
-    public static final ForgeConfigSpec.IntValue PORT;
-    public static final ForgeConfigSpec.IntValue REQUEST_TIMEOUT_SECONDS;
+    public static final ForgeConfigSpec.ConfigValue<String> PLAYER_HOST_EXECUTABLE;
     public static final ForgeConfigSpec SPEC;
 
     static {
-        BUILDER.push("connection");
+        BUILDER.push("player");
 
-        HOST = BUILDER
-                .comment("VibeSkua host. Keep 127.0.0.1 when Minecraft and VibeSkua run on the same PC.")
-                .define("host", "127.0.0.1");
-
-        PORT = BUILDER
-                .comment("VibeSkua Remote Control port.")
-                .defineInRange("port", 8088, 1, 65535);
-
-        REQUEST_TIMEOUT_SECONDS = BUILDER
-                .comment("Maximum time to wait for one API request.")
-                .defineInRange("requestTimeoutSeconds", 5, 1, 30);
+        PLAYER_HOST_EXECUTABLE = BUILDER
+                .comment("Path to SkuaCraft.PlayerHost.exe. Relative paths are resolved from the Minecraft instance directory.")
+                .define("playerHostExecutable", "config/skuacraft/player-host/SkuaCraft.PlayerHost.exe");
 
         BUILDER.pop();
         SPEC = BUILDER.build();
@@ -42,19 +34,11 @@ public final class SkuaCraftConfig {
         );
     }
 
-    public static String getBaseUrl() {
-        String host = HOST.get().trim();
+    public static Path getPlayerHostExecutable(Path gameDirectory) {
+        Path configuredPath = Path.of(PLAYER_HOST_EXECUTABLE.get().trim());
 
-        if (host.startsWith("http://")) {
-            host = host.substring("http://".length());
-        } else if (host.startsWith("https://")) {
-            host = host.substring("https://".length());
-        }
-
-        while (host.endsWith("/")) {
-            host = host.substring(0, host.length() - 1);
-        }
-
-        return "http://" + host + ":" + PORT.get();
+        return configuredPath.isAbsolute()
+                ? configuredPath.normalize()
+                : gameDirectory.resolve(configuredPath).normalize();
     }
 }

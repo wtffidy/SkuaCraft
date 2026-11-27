@@ -1,54 +1,73 @@
 # 🎮 SkuaCraft player architecture
 
-## The product
+## Product definition
 
-The user opens a handheld console in Minecraft and plays the real AdventureQuest Worlds game client, with the Skua bot runtime available inside that same experience.
+The handheld in Minecraft displays the real AQW game and runs the real Skua bot runtime. The desktop VibeSkua window is not part of the visible player path.
 
-## Proven building blocks
+## Selected components
 
-### Browser renderer
+### Rinku 3.0.4 (Forge 1.20.1)
 
-Rinku is the preferred integration candidate: it is a Chromium/JCEF library mod with a Forge 1.20.1 build. It exposes the browser view through Minecraft's render/input pipeline. MCEF 2.1.6 is the fallback because its example code demonstrates the needed API: create a browser, render `browser.getRenderer().getTextureID()`, resize it, forward mouse/key/wheel events and close it cleanly.
+Rinku owns the Chromium/JCEF browser instance inside Minecraft. Its off-screen renderer exposes a texture identifier that the Skua player screen blits into the handheld bezel. The same browser API accepts keyboard, character, mouse and wheel input.
 
-### AQW game player
+Gradle dependency:
 
-MVS v1.0.6 contains a working Ruffle web player:
-- `Skua.Flash.Ruffle/RuffleHost.cs`: local loopback HTTP server, embedded HTML/JS/WASM/SWF resources, AQW HTTP proxy, socket proxy and WebSocket control channel.
-- `Skua.Flash.Ruffle/ControlChannel.cs`: request/response and asynchronous ExternalInterface calls between JavaScript and .NET.
-- `Skua.Flash.Ruffle/RuffleFlashUtil.cs`: implements Skua `IFlashUtil`, translates calls and connects them to the runtime.
-- `Skua.AS3/skua/bin/skua.swf`: the Skua SWF loaded by the browser.
+~~~groovy
+implementation fg.deobf('curse.maven:rinku-1366156:8745377')
+~~~
 
-The web page loads Ruffle WebAssembly, then the Skua SWF. Its bridge proxies cross-origin game requests through the local host and routes ExternalInterface calls over a WebSocket.
+The game instance must contain the Rinku library mod; its native Chromium runtime is downloaded and cached on first launch when required.
 
-### Skua runtime
+### MVS v1.0.6 player runtime
 
-Skua Core is .NET 10 and remains responsible for scripts, game state and automation. Minecraft's Java runtime must not be asked to execute those C# scripts or reimplement their API.
+The MVS source is pinned as the vendor/MVS Git submodule. The .NET host references only Skua.Core and Skua.Flash.Ruffle, not the Avalonia desktop application.
 
-Initial packaging direction: a hidden .NET 10 player-host process launched by the mod. It owns RuffleHost + Skua Core and exposes only a loopback/token-protected session interface to Minecraft. The Minecraft browser loads the local page from this same process.
+- RuffleHost serves the player page, SWF and Ruffle resources on loopback.
+- Ruffle proxies AQW HTTP and WebSocket traffic through the host.
+- ControlChannel carries ExternalInterface requests between JavaScript and .NET.
+- RuffleFlashUtil implements Skua IFlashUtil.
+- ScriptInterface and ScriptManager provide the real game state and script runtime.
 
-## Runtime lifecycle
+### Minecraft client
 
-1. Minecraft loads SkuaCraft and initializes Rinku.
-2. The console is opened; the mod starts the player host if it is not already running.
-3. The host binds a random port on `127.0.0.1` and creates a random session token.
-4. RuffleHost serves the page, SWF and browser assets; the mod creates a Chromium view at the generated local URL.
-5. The browser establishes its control WebSocket. Skua Core's `RuffleFlashUtil` receives game calls and answers them from the live runtime.
-6. The browser texture is rendered on the handheld display. Input is forwarded to the browser only while the console is focused.
-7. Closing the console pauses/dims or backgrounds the browser according to runtime policy; exiting the world shuts down the child process cleanly.
+The mod registers the physical console and opens SkuaPlayerScreen on right-click. The screen reuses a singleton browser session, renders its texture and forwards input while focused. Closing the screen releases focus without closing the AQW browser or stopping the Skua host.
 
-## Security and reliability
+## Player host process
 
-- Loopback-only sockets; never bind to `0.0.0.0`.
-- Random session token; no unauthenticated control URL.
-- No account passwords in logs, Minecraft config or process arguments.
-- Do not block Minecraft's render thread on C# or browser calls.
-- Supervise the child process, detect early exit, restart the session and show a visible error state.
-- Dispose browser textures and native browser instances on close/world exit.
-- Keep AQW game and script state in Skua Core, not duplicated in Java.
+player-host/SkuaCraft.PlayerHost.csproj builds a self-contained .NET 10 Windows x64 process. It starts Skua Core, RuffleHost and the player bridge without opening an Avalonia or WinForms window.
 
-## Important verification gates
+The host receives only two process arguments: a session-file path and a stop-file path. It writes a JSON session record with the Ruffle page URL, process ID and host version. The URL is bound to loopback and contains the random Ruffle session token.
 
-- Verify Ruffle's bundled WebAssembly and WebGL build against Rinku's actual Chromium version.
-- Verify the MVS Skua SWF and server proxy behave correctly on Windows x64.
-- Confirm the exact MVS Skua Core snapshot is compatible with the chosen VibeSkua fork/API surface.
-- Prove a real login and playable world before investing in the full handheld model/animation.
+## Full player lifecycle
+
+1. Minecraft loads SkuaCraft and Rinku.
+2. Right-clicking the console opens the player screen.
+3. SkuaCraft starts or reuses SkuaCraft.PlayerHost.exe.
+4. The host initializes Skua Core, client files, RuffleHost and RuffleFlashUtil.
+5. Ruffle serves the Skua SWF and connects its ExternalInterface bridge.
+6. Rinku renders the live game page to a texture in Minecraft.
+7. Mouse, keyboard and wheel input are routed to the browser while the player screen is open.
+8. Closing the handheld hides the display and releases focus; the browser and AQW session remain alive.
+9. Minecraft process shutdown signals the player host to exit.
+
+## Security and recovery
+
+- Player host and Ruffle traffic bind only to loopback.
+- Session URL token is generated by RuffleHost.
+- Minecraft rejects any page URL that is not loopback HTTP.
+- No credentials are included in session metadata or command-line arguments.
+- Network calls and Skua script work do not execute on Minecraft's render thread.
+- The host writes a log at config/skuacraft/logs/player-host.log.
+- The host launcher detects a stopped process and starts a fresh one when the console is opened again.
+
+## Current verification boundary
+
+The first implementation milestone is the actual game screen and embedded Skua runtime. A successful compile does not prove that AQW login, Ruffle WebGL, audio or all bot functions work in-game. Those must be tested in the Project Infinity instance before release.
+
+## Next milestones
+
+- Add Minecraft-native Skua script loader and runtime controls.
+- Expose player status, combat, movement, inventory, bank, quests, drops, options and logs through the host.
+- Add script source discovery from the existing Skua script workflow.
+- Build the two-hand first-person handheld pose and screen animation.
+- Test real AQW login, game actions, script execution, and session persistence in the pack.
