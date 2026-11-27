@@ -42,6 +42,9 @@ Type: files; Name: "{code:GetModsDirectory}\rinku-*.jar"
 var
   InstancePage: TInputDirWizardPage;
 
+function GetDriveType(lpRootPathName: string): LongWord; external 'GetDriveTypeW@kernel32.dll stdcall';
+function GetLogicalDrives: LongWord; external 'GetLogicalDrives@kernel32.dll stdcall';
+
 function GetModsDirectory(Param: string): string;
 begin
   Result := AddBackslash(InstancePage.Values[0]) + 'mods';
@@ -52,20 +55,153 @@ begin
   Result := AddBackslash(InstancePage.Values[0]) + 'config\skuacraft\player-host';
 end;
 
+function IsDirectorySearchExcluded(DirectoryName: string): Boolean;
+var
+  Name: string;
+begin
+  Name := Lowercase(DirectoryName);
+  Result :=
+    (Name = 'windows') or
+    (Name = 'program files') or
+    (Name = 'program files (x86)') or
+    (Name = 'programdata') or
+    (Name = '$recycle.bin') or
+    (Name = 'system volume information') or
+    (Name = 'recovery') or
+    (Name = 'perflogs') or
+    (Name = 'appdata') or
+    (Name = 'temp') or
+    (Name = '.git') or
+    (Name = 'node_modules') or
+    (Name = '.gradle') or
+    (Name = '.nuget');
+end;
+
+// Finds a directory named "minecraft" with an "instances" child.
+// The depth limit keeps fallback discovery bounded on machines with large drives.
+function FindMinecraftInstances(Directory: string; Depth: Integer): string;
+var
+  FindRec: TFindRec;
+  ChildDirectory: string;
+  CandidateDirectory: string;
+begin
+  Result := '';
+
+  if not DirExists(Directory) then
+    Exit;
+
+  if Lowercase(ExtractFileName(RemoveBackslash(Directory))) = 'minecraft' then
+  begin
+    CandidateDirectory := AddBackslash(Directory) + 'instances';
+    if DirExists(CandidateDirectory) then
+    begin
+      Result := CandidateDirectory;
+      Exit;
+    end;
+  end;
+
+  if Depth <= 0 then
+    Exit;
+
+  if FindFirst(AddBackslash(Directory) + '*', FindRec) then
+  begin
+    try
+      repeat
+        if (FindRec.Name <> '.') and (FindRec.Name <> '..') and
+           ((FindRec.Attributes and $10) <> 0) and
+           not IsDirectorySearchExcluded(FindRec.Name) then
+        begin
+          ChildDirectory := AddBackslash(Directory) + FindRec.Name;
+          Result := FindMinecraftInstances(ChildDirectory, Depth - 1);
+          if Result <> '' then
+            Exit;
+        end;
+      until not FindNext(FindRec);
+    finally
+      FindClose(FindRec);
+    end;
+  end;
+end;
+
+function FindDefaultInstanceDirectory(): string;
+var
+  ProfileDirectory: string;
+  CandidateDirectory: string;
+  DriveMask: LongWord;
+  DriveIndex: Integer;
+  DriveRoot: string;
+begin
+  Result := '';
+  ProfileDirectory := ExpandConstant('{userprofile}');
+
+  // Prefer the standard CurseForge location.
+  CandidateDirectory := AddBackslash(ProfileDirectory) + 'curseforge\minecraft\Instances';
+  if DirExists(CandidateDirectory) then
+  begin
+    Result := CandidateDirectory;
+    Exit;
+  end;
+
+  // Check common alternate CurseForge locations before searching local drives.
+  CandidateDirectory := AddBackslash(ExpandConstant('{userdocs}')) + 'CurseForge\Minecraft\Instances';
+  if DirExists(CandidateDirectory) then
+  begin
+    Result := CandidateDirectory;
+    Exit;
+  end;
+
+  CandidateDirectory := AddBackslash(ExpandConstant('{userappdata}')) + 'CurseForge\Minecraft\Instances';
+  if DirExists(CandidateDirectory) then
+  begin
+    Result := CandidateDirectory;
+    Exit;
+  end;
+
+  CandidateDirectory := AddBackslash(ExpandConstant('{localappdata}')) + 'CurseForge\Minecraft\Instances';
+  if DirExists(CandidateDirectory) then
+  begin
+    Result := CandidateDirectory;
+    Exit;
+  end;
+
+  // Search this user's profile first, then other fixed local drives.
+  Result := FindMinecraftInstances(ProfileDirectory, 8);
+  if Result <> '' then
+    Exit;
+
+  DriveMask := GetLogicalDrives();
+  for DriveIndex := 0 to 25 do
+  begin
+    if (DriveMask and (1 shl DriveIndex)) <> 0 then
+    begin
+      DriveRoot := Chr(Ord('A') + DriveIndex) + ':\';
+      if GetDriveType(DriveRoot) = 3 then
+      begin
+        Result := FindMinecraftInstances(DriveRoot, 7);
+        if Result <> '' then
+          Exit;
+      end;
+    end;
+  end;
+end;
+
 procedure InitializeWizard();
+var
+  DefaultInstanceDirectory: string;
 begin
   InstancePage := CreateInputDirPage(
     wpWelcome,
     'Choose your Minecraft instance',
     'Select the Forge instance folder',
-    'Choose the folder that contains your Minecraft instance. The installer adds SkuaCraft and Rinku to its mods folder and installs PlayerHost under config\skuacraft. Existing SkuaCraft settings and login data are preserved.' + #13#10 + #13#10 +
+    'The installer looks for your CurseForge installation and preselects its Instances folder. If it cannot find it, it searches for other Minecraft\Instances folders on your local drives. You can still browse to a different instance.' + #13#10 + #13#10 +
     'CurseForge: open the modpack profile menu and choose Open Folder.' + #13#10 +
     'Official Launcher: Installations > your Forge profile > Edit > More Options > Game Directory.',
     False,
     ''
   );
   InstancePage.Add('Minecraft instance folder:');
-  InstancePage.Values[0] := '';
+  DefaultInstanceDirectory := FindDefaultInstanceDirectory();
+  InstancePage.Values[0] := DefaultInstanceDirectory;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
