@@ -40,7 +40,9 @@ jobs:
         run: |
           $tokens = $null
           $errors = $null
-          [System.Management.Automation.Language.Parser]::ParseFile("./player-host/Install-PlayerHost.ps1", [ref]$tokens, [ref]$errors) | Out-Null
+          foreach ($scriptPath in @("./player-host/Install-PlayerHost.ps1", "./installer/Build-Installer.ps1")) {
+            [System.Management.Automation.Language.Parser]::ParseFile($scriptPath, [ref]$tokens, [ref]$errors) | Out-Null
+          }
           if ($errors.Count -gt 0) {
             $errors | ForEach-Object { Write-Error $_.Message }
             throw "PlayerHost installer contains PowerShell syntax errors."
@@ -49,3 +51,11 @@ jobs:
       - name: Smoke test player host
         shell: pwsh
         run: ./player-host/SmokeTest.ps1
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build guided Windows installer
+        shell: pwsh
+        run: ./installer/Build-Installer.ps1
