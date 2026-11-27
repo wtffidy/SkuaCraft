@@ -19,9 +19,6 @@
     <ProjectReference Include="..\vendor\MVS\src\Skua.Core\Skua.Core.csproj" />
     <ProjectReference Include="..\vendor\MVS\src\Skua.Flash.Ruffle\Skua.Flash.Ruffle.csproj" />
   </ItemGroup>
-  <ItemGroup>
-    <EmbeddedResource Include="ScriptCatalogue.json" LogicalName="SkuaCraft.PlayerHost.ScriptCatalogue.json" />
-  </ItemGroup>
   <!-- MVS resolves these files from AppContext.BaseDirectory. Bundle and self-extract them
        so they exist beside the extracted PlayerHost runtime instead of only beside the EXE. -->
   <ItemGroup>
