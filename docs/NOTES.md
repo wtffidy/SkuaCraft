@@ -1,114 +1,135 @@
 # 🥔 SkuaCraft field notes
 
-> **Project mood:** premium pocket hardware meets a slightly over-engineered AQW command center.
+> **Product definition:** a real AQW + Skua player hosted inside Minecraft, presented as an in-world handheld console.
 
-This is the creative brief and the technical guardrail sheet. The console should feel like an object that belongs in the Minecraft world, not a webpage pasted over the pause menu.
+## 01 · Non-negotiable definition
 
-## 01 · The object
+SkuaCraft must run the actual AQW game client and the actual Skua runtime in the Minecraft client experience.
 
-**Working product name:** Skua Console  
-**Silhouette:** compact rugged handheld, substantial bezel, visible physical controls  
-**Palette:** graphite casing, slate trim, signal teal, ultraviolet accents and warm amber status lights  
-**Screen language:** sharp typography, quiet dividers, tiny system labels and restrained glow  
-**Material language:** scuffed metal, dark glass, hard edges and retro-futurist equipment-room energy
+A dashboard that sends HTTP commands to a separate desktop VibeSkua window does **not** satisfy the goal. The old remote-control panels are a prototype and are not the final architecture.
 
-### The interaction fantasy
+The player must support the real game loop: load the SWF, connect to AQW, log in, render the game, receive mouse/keyboard input, expose Skua's game APIs to the bot runtime, and run scripts from inside Minecraft.
 
-1. Craft the console.
-2. Put it in the main hand.
-3. See the device held naturally in first person.
-4. Right-click to bring up the close-up control deck.
-5. Close the deck and return to the world without pausing the simulation.
+## 02 · Runtime investigation
 
-The first item model has first-person and third-person transforms, and the custom screen is framed as a field console. The more cinematic two-hand pose, visible arms, open/close transition, device tilt and sound design are a dedicated visual milestone. The initial model should not be mistaken for that finished presentation.
+### Desktop VibeSkua
 
-## 02 · The software inside
+The current desktop app uses an Avalonia native host around the Windows Shockwave Flash ActiveX/WinForms control. That host is Windows-specific and cannot be moved directly into Minecraft's Java/Forge process.
 
-The handheld is a remote, not a pocket-sized clone of the entire desktop application.
+Reference files:
+- [WinFormsFlashHost.cs](https://github.com/wtffidy/VibeSkua/blob/main/Skua.App.Avalonia/Controls/WinFormsFlashHost.cs)
+- [Skua.App.Avalonia.csproj](https://github.com/wtffidy/VibeSkua/blob/main/Skua.App.Avalonia/Skua.App.Avalonia.csproj)
 
-| Layer | Responsibility |
+### MVS v1.0.6
+
+MVS contains the practical portable route:
+
+- `Skua.Flash.Ruffle` is a .NET 10 library implementing `IFlashUtil`.
+- `RuffleHost` serves the local HTML/JavaScript/Ruffle WebAssembly assets and the `skua.swf`.
+- The host proxies AQW HTTP requests and WebSocket game sockets.
+- `ControlChannel` bridges Ruffle's JavaScript ExternalInterface calls to .NET.
+- `RuffleFlashUtil` connects that bridge to Skua Core, so Skua scripts continue to use the real game model and interfaces.
+- The Android app displays the player through Android WebView, but that Android UI itself is not the target to port.
+
+Source: [Arglax/MVS v1.0.6](https://github.com/Arglax/MVS/tree/v1.0.6).
+
+## 03 · Intended architecture
+
+| Component | Responsibility |
 | --- | --- |
-| Minecraft item | Craftable physical entry point |
-| Console screen | Navigation, status and player controls |
-| API client | Background HTTP calls, timeouts and JSON parsing |
-| VibeSkua | Actual AQW game state, script runtime and automation |
-| Script repository | Source and metadata reference, not a script-generation target |
+| Minecraft Forge mod | Item, first-person handheld, Minecraft screens, navigation and key bindings |
+| Rinku browser view | Render the local Ruffle player inside Minecraft and forward input |
+| Ruffle page | Run the AQW SWF using WebAssembly/WebGL |
+| .NET 10 player host | Local Ruffle HTTP/WebSocket host and Skua runtime |
+| Skua Core | Game state, scripts, automation, client options, inventory, quests and other bot interfaces |
+| Script catalogue | Existing script metadata and sources; no new script-generation system |
 
-The desktop client remains authoritative. If the API is offline, Minecraft must remain responsive and show a clear disconnected state.
+The .NET player host is started as a hidden child process by SkuaCraft. It is not a second visible Skua window. The Minecraft client owns the visible presentation and input experience.
 
-## 03 · Visual rules
+### Local connection rules
 
-- Keep a consistent bezel, content inset and baseline grid.
-- Use teal for healthy/active states, amber for attention and red for destructive actions.
-- Use violet as a secondary accent, not as a competing primary color.
-- Avoid giant debug labels, raw JSON dumps and default vanilla-looking button rows.
-- Truncate long usernames, script names and map names safely.
-- Keep all panels readable at normal game resolutions and degrade gracefully on smaller windows.
-- Prefer meaningful iconography and status indicators over ornamental noise.
-- Keep the on-screen notice area useful: show the actual result returned by VibeSkua.
+- Bind all player-host endpoints to loopback only.
+- Use a random per-session token for the Ruffle page and control websocket.
+- Do not expose the player host to the local network.
+- Do not save account credentials in Minecraft config or logs.
+- Keep game networking and bot execution in the Skua runtime, not in Minecraft's render thread.
 
-## 04 · Safety rules
+## 04 · Browser integration candidate
 
-- Default to `127.0.0.1:8088`.
-- Never silently scan the LAN or connect to a discovered host.
-- Never store AQW account credentials in the Minecraft config.
-- Never port-forward the unauthenticated remote API.
-- Send network work off the render thread.
-- Put confirmations in front of future destructive or bulk actions.
-- Never let a disconnected or malformed API response crash the game screen.
-- Keep the Minecraft client responsive even if VibeSkua is not running.
+**Preferred:** Rinku, Forge 1.20.1 library release 3.0.4.
 
-## 05 · Feature milestones
+Rinku is a maintained Chromium/JCEF browser library and supports a controllable browser rendered into Minecraft. Its project documentation lists Windows, macOS and Linux x64/ARM64 support and Chromium 151.0.7922.34.
 
-### Milestone A · Handheld foundation
-- [x] Forge 1.20.1 project structure
-- [x] Pack-aligned Forge 47.4.28 target
-- [x] Client connection config
-- [x] Craftable Skua Console
-- [x] Custom item model and first-person transforms
-- [x] Non-blocking API client
-- [x] Ten-panel navigation and live dashboard
-- [x] Script browsing, selection, load and start
-- [x] Combat actions, rest and jump-to-spawn
-- [x] Bag/bank browsing, equip, deposit and withdraw
-- [x] Quest requirement inspection and guarded completion
-- [x] Drop list, pickup and pickup-all
-- [x] Chat feed and zone-message sending
-- [x] Script log viewer
-- [x] Live client option toggles
-- [x] Client tab list, active-tab selection and Army Queue basics
+**Fallback:** MCEF 2.1.6 for Forge 1.20.1. Its example API exposes a browser texture ID and mouse/keyboard input forwarding, which is the exact integration surface needed for the first proof of concept.
 
-### Milestone B · Full control deck
-- [ ] Script search, category filter and paging polish
-- [ ] Account/tab selector and per-tab routing
-- [ ] Script search, category filters and richer paging
-- [ ] Per-tab routing for every command and manager-wide broadcast actions
-- [ ] Full inventory item metadata and advanced bulk actions
-- [ ] Army Queue step editing, presets and scheduler management
+The initial proof of concept must verify that the bundled Ruffle page works correctly in the selected browser engine, especially WebAssembly, WebGL, game audio, clipboard/keyboard input, cookies and the AQW socket proxy.
 
-### Milestone C · Handheld theatre
-- [ ] Dedicated two-hand/arm pose while the console is open
-- [ ] Open/close animation and sound
-- [ ] Device tilt and subtle screen scan animation
-- [ ] Button press feedback and connection pulse
-- [ ] Optional compact HUD mode
-- [ ] Final in-game model and texture pass
+## 05 · The handheld experience
 
-### Milestone D · Release hardening
-- [ ] Build and launch in the exact Project Infinity instance
-- [ ] Test singleplayer and dedicated-server registry behavior
-- [ ] Test offline Skua, invalid host, slow responses and server errors
-- [ ] Test every action against the current VibeSkua build
-- [ ] Produce release JAR, install instructions and compatibility notes
+### Physical presentation
 
-## 06 · Mobile fallback
+- Craftable, one-stack Skua Console.
+- A convincing first-person held device with visible hands/arms.
+- Device screen displays the live AQW player, not an imitation dashboard.
+- Buttons and shell detail are modeled as physical hardware.
+- Opening the console brings the player into focus; closing it returns control to Minecraft.
 
-The Android project is a contingency reference, not the default implementation route.
+### In-game player layout
 
-The existing VibeSkua desktop service already exposes the core actions needed for a native Minecraft control deck. Porting the mobile client only makes sense if desktop API coverage proves incomplete or unusable. Until then, the direct API route is smaller, more maintainable and avoids dragging a mobile UI framework into Forge.
+- Main display: live AQW client.
+- Compact Skua rail: start/stop script, player status, key tools.
+- Full tool pages: script loader/repo, automation, inventory/bank, quests, drops, options, logs, packets and plugins.
+- Mouse/keyboard input is forwarded to the browser while the player is focused.
+- Minecraft input is restored on close, with no stuck keys or mouse buttons.
 
-Reference: [MVS v1.0.6](https://github.com/Arglax/MVS/releases/tag/v1.0.6).
+The actual game view is the primary content. Skua tools are supporting controls around it, not the reverse.
+
+## 06 · Milestones
+
+### A — Browser/player proof of concept
+- [ ] Add Rinku (or MCEF fallback) as the in-game Chromium backend.
+- [ ] Port or host the MVS Ruffle HTTP/WebSocket service.
+- [ ] Load the bundled Skua SWF and display the AQW game inside a Minecraft screen.
+- [ ] Forward mouse, keyboard, wheel, focus and resize events.
+- [ ] Confirm real AQW login, world rendering, movement, chat and audio.
+
+### B — Real Skua runtime
+- [ ] Host Skua Core and `RuffleFlashUtil` in the bundled .NET 10 player process.
+- [ ] Connect the Ruffle ExternalInterface bridge to Skua Core.
+- [ ] Verify live `IScriptInterface` state while in the game.
+- [ ] Run an existing script from the script repository.
+- [ ] Add runtime lifecycle, crash recovery and clean shutdown.
+
+### C — Minecraft-native Skua tools
+- [ ] Script list, categories, search, load, start, pause and stop.
+- [ ] Auto/Hunt, combat options, player/map controls.
+- [ ] Inventory, bank, drops and quests.
+- [ ] Logs, options, chat, packets and advanced tools.
+- [ ] Multi-account and Army support where the runtime permits.
+
+### D — Handheld polish
+- [ ] First-person two-hand held console model/pose.
+- [ ] Live game texture on the handheld screen.
+- [ ] Device open/close animations and button feedback.
+- [ ] Resizable display modes and crisp high-DPI rendering.
+- [ ] Sound and subtle screen treatment.
+
+### E — Pack validation
+- [ ] Build against Project Infinity 0.1, Minecraft 1.20.1, Forge 47.4.28 and Java 17.
+- [ ] Test on the actual pack instance.
+- [ ] Test runtime download, offline startup, connection loss and player recovery.
+- [ ] Verify no server-side dependency is required for the client-only player.
+- [ ] Package the mod and bundled player host for installation.
+
+## 07 · Explicit non-goals
+
+- Do not make a separate desktop VibeSkua window the visible game player.
+- Do not stop at HTTP remote-control panels.
+- Do not emulate the AQW game world in Minecraft blocks/entities.
+- Do not rewrite Skua's bot engine in Java.
+- Do not create or author AQW scripts inside this project.
+- Do not port the Android UI wholesale; reuse its proven player/runtime pieces.
 
 ---
 
-**North star:** the player should feel like they pulled out a piece of in-world kit, not opened a spreadsheet with a Minecraft background.
+**North star:** Minecraft is the console. The screen is the real game. Skua is the brain behind it.
