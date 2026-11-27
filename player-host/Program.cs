@@ -69,6 +69,14 @@ public static class Program
             RuffleHost playerHost = serviceProvider.GetRequiredService<RuffleHost>();
 
             ApplyRuffleScalingPatch(playerHost);
+            playerHost.Control.PageLog += message =>
+            {
+                if (message.StartsWith("AQW root fit", StringComparison.Ordinal)
+                    || message.StartsWith("AQW fit waiting", StringComparison.Ordinal))
+                {
+                    Console.WriteLine($"[AQW scaling] {message}");
+                }
+            };
 
             // Mirrors MVS's SkuaStartupHandler.LoadGame behaviour. Ruffle requests
             // the Skua SWF after its page and ExternalInterface bridge are ready.
