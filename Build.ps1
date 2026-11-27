@@ -384,7 +384,9 @@ if (-not $SkipFolderPicker) {
     Write-Host ""
     $SelectFolder = Read-Host "Select another folder for the built JAR? (Y/N)"
 
-    if ($SelectFolder -match '(?i)^y(es)?) {
+    if ($SelectFolder -match '^(?i)y(es)?$') {
+        $FolderDialog = $null
+
         try {
             Add-Type -AssemblyName System.Windows.Forms
             $FolderDialog = [System.Windows.Forms.FolderBrowserDialog]::new()
@@ -404,33 +406,7 @@ if (-not $SkipFolderPicker) {
             }
         }
         finally {
-            if ($FolderDialog) {
-                $FolderDialog.Dispose()
-            }
-        }
-    }
-}
-) {
-        try {
-            Add-Type -AssemblyName System.Windows.Forms
-            $FolderDialog = [System.Windows.Forms.FolderBrowserDialog]::new()
-            $FolderDialog.Description = "Choose where to copy the SkuaCraft JAR"
-            $FolderDialog.ShowNewFolderButton = $true
-
-            if ($FolderDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK -and
-                -not [string]::IsNullOrWhiteSpace($FolderDialog.SelectedPath)) {
-                foreach ($Artifact in @(Get-ChildItem $DistributionDirectory -Filter "*.jar" -File)) {
-                    $SelectedDestination = Join-Path $FolderDialog.SelectedPath $Artifact.Name
-                    Copy-Item -LiteralPath $Artifact.FullName -Destination $SelectedDestination -Force
-                    Write-Host "[OK] Copied to: $SelectedDestination" -ForegroundColor Green
-                }
-            }
-            else {
-                Write-Host "[INFO] Folder selection cancelled. JAR remains in the build folder." -ForegroundColor Yellow
-            }
-        }
-        finally {
-            if ($FolderDialog) {
+            if ($null -ne $FolderDialog) {
                 $FolderDialog.Dispose()
             }
         }
