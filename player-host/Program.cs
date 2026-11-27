@@ -404,6 +404,10 @@ public static class Program
 
     private static void WriteStartupDiagnostic(string path, string message)
     {
+        // Mirror every checkpoint into the existing PlayerHost console log. The
+        // dedicated startup log remains useful when stdout is unavailable.
+        Console.WriteLine(message);
+
         try
         {
             string? directory = Path.GetDirectoryName(path);
