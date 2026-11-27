@@ -11,7 +11,7 @@
   <img alt="Minecraft" src="https://img.shields.io/badge/Minecraft-1.20.1-3C8527?style=for-the-badge&logo=minecraft&logoColor=white" />
   <img alt="Forge" src="https://img.shields.io/badge/Forge-47.4.28-orange?style=for-the-badge" />
   <img alt="Java" src="https://img.shields.io/badge/Java-17-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white" />
-  <img alt="Status" src="https://img.shields.io/badge/Status-Embedded%20Player%20Prototype-8B5CF6?style=for-the-badge" />
+  <img alt="Status" src="https://img.shields.io/badge/Status-Embedded%20Player-8B5CF6?style=for-the-badge" />
 </p>
 
 ---
@@ -48,16 +48,16 @@ The MVS v1.0.6 source is pinned as a Git submodule at vendor/MVS. The desktop Vi
 
 ## 📦 Installation
 
-GitHub Releases provide a guided Windows installer as the recommended download, plus the individual files for manual installations. A matching `v*` tag builds, smoke-tests and publishes the release. Pull requests and ordinary branch builds validate the installer but do not publish downloads.
+Every successful push to `main` now updates a rolling [latest main prerelease](https://github.com/wtffidy/SkuaCraft/releases/tag/main-latest). It contains the guided Windows installer and individual downloads with stable filenames, so the download links do not change between builds. Versioned releases are published separately from `v*` tags on the [Releases page](https://github.com/wtffidy/SkuaCraft/releases).
 
-1. Download `SkuaCraft-Setup-<version>.exe` from the [SkuaCraft Releases page](https://github.com/wtffidy/SkuaCraft/releases).
+1. Download [SkuaCraft-Setup.exe](https://github.com/wtffidy/SkuaCraft/releases/download/main-latest/SkuaCraft-Setup.exe) from the latest main prerelease.
 2. Run the installer and browse to your Minecraft Forge instance folder. Select the instance root, the folder containing `mods` and `config`, not the `mods` folder itself.
    - **CurseForge:** open the modpack profile menu and choose **Open Folder**.
    - **Official Minecraft Launcher:** open **Installations**, find your Forge profile, choose **Edit > More Options**, then open the **Game Directory**.
 3. Click Install. The installer places SkuaCraft and its required Rinku 3.0.4 dependency in `mods/`, and PlayerHost in `config/skuacraft/player-host/`.
 4. Launch Minecraft, equip the Skua Console and right-click it.
 
-The installer does not overwrite SkuaCraft's existing configuration or saved login data. It is designed for Windows x64 and Forge 1.20.1. Advanced users can still download the standalone JAR, Rinku dependency and PlayerHost ZIP from the same release.
+The installer does not overwrite SkuaCraft's existing configuration or saved login data. It is designed for Windows x64 and Forge 1.20.1. Advanced users can download the [standalone mod JAR](https://github.com/wtffidy/SkuaCraft/releases/download/main-latest/SkuaCraft.jar), [Rinku dependency](https://github.com/wtffidy/SkuaCraft/releases/download/main-latest/Rinku-3.0.4.jar) and [PlayerHost ZIP](https://github.com/wtffidy/SkuaCraft/releases/download/main-latest/SkuaCraft-PlayerHost-win-x64.zip) from the same rolling prerelease.
 
 ## 🛠️ Build from source
 
