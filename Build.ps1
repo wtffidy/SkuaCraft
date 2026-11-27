@@ -88,7 +88,36 @@ function Get-Java17Home {
             continue
         }
 
-        $VersionOutput = (& $JavaExe -version 2>&1 | Out-String)
+        # java.exe writes its version banner to stderr. Read both streams
+        # through Process directly so PowerShell's Stop preference cannot
+        # turn that normal output into a NativeCommandError.
+        $VersionStartInfo = [System.Diagnostics.ProcessStartInfo]::new()
+        $VersionStartInfo.FileName = $JavaExe
+        $VersionStartInfo.Arguments = "-version"
+        $VersionStartInfo.UseShellExecute = $false
+        $VersionStartInfo.CreateNoWindow = $true
+        $VersionStartInfo.RedirectStandardOutput = $true
+        $VersionStartInfo.RedirectStandardError = $true
+
+        $VersionProcess = [System.Diagnostics.Process]::new()
+        $VersionProcess.StartInfo = $VersionStartInfo
+
+        try {
+            [void]$VersionProcess.Start()
+            $VersionStdOut = $VersionProcess.StandardOutput.ReadToEnd()
+            $VersionStdErr = $VersionProcess.StandardError.ReadToEnd()
+            $VersionProcess.WaitForExit()
+
+            if ($VersionProcess.ExitCode -ne 0) {
+                continue
+            }
+
+            $VersionOutput = $VersionStdOut + [Environment]::NewLine + $VersionStdErr
+        }
+        finally {
+            $VersionProcess.Dispose()
+        }
+
         $VersionMatch = [regex]::Match($VersionOutput, '(?i)(?:version\s+"|openjdk\s+)(?<version>\d+(?:\.\d+)*)')
 
         if (-not $VersionMatch.Success) {
