@@ -22,6 +22,7 @@ public sealed class PlayerControlServer : IAsyncDisposable
     private readonly IScriptManager scriptManager;
     private readonly IGetScriptsService scripts;
     private readonly ConcurrentBag<Task> handlers = new();
+    private readonly SemaphoreSlim scriptCommands = new(1, 1);
     private Task? acceptTask;
     private bool started;
 
@@ -205,67 +206,107 @@ public sealed class PlayerControlServer : IAsyncDisposable
             || request.Path.Equals("/api/scripts/start", StringComparison.OrdinalIgnoreCase)
             || request.Path.Equals("/api/scripts/download", StringComparison.OrdinalIgnoreCase))
         {
-            string path = GetString(root, "path");
-            ScriptInfo? info = scripts.Scripts.FirstOrDefault(script =>
-                string.Equals(script.FilePath, path, StringComparison.OrdinalIgnoreCase));
-
-            if (info is null)
+            await scriptCommands.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
             {
-                return (404, new { success = false, message = "That script is not in the configured Skua catalogue." });
-            }
+                string path = GetString(root, "path");
+                ScriptInfo? info = scripts.Scripts.FirstOrDefault(script =>
+                    string.Equals(script.FilePath, path, StringComparison.OrdinalIgnoreCase));
 
-            Stopwatch commandTimer = Stopwatch.StartNew();
-            Console.WriteLine($"[PlayerControl] {request.Path} requested for {info.FilePath}.");
-            await scripts.DownloadScriptAsync(info, cancellationToken).ConfigureAwait(false);
-            Console.WriteLine($"[PlayerControl] Verified {info.FilePath} in {commandTimer.ElapsedMilliseconds} ms.");
-
-            if (request.Path.EndsWith("/download", StringComparison.OrdinalIgnoreCase))
-            {
-                return (200, new { success = true, message = $"Downloaded {info.Name}.", path = info.FilePath });
-            }
-
-            scriptManager.SetLoadedScript(info.LocalFile);
-
-            if (request.Path.EndsWith("/load", StringComparison.OrdinalIgnoreCase))
-            {
-                Console.WriteLine($"[PlayerControl] Loaded {info.FilePath} in {commandTimer.ElapsedMilliseconds} ms.");
-                return (200, new { success = true, message = $"Loaded {info.Name}.", path = info.FilePath });
-            }
-
-            Console.WriteLine($"[PlayerControl] Compiling and starting {info.FilePath}.");
-            Exception? startError = await scriptManager.StartScript().ConfigureAwait(false);
-            if (startError is not null)
-            {
-                Console.WriteLine($"[PlayerControl] Start failed for {info.FilePath}: {startError}");
-                return (400, new
+                if (info is null)
                 {
-                    success = false,
-                    message = $"Could not start {info.Name}: {startError.Message}",
-                    path = info.FilePath
-                });
-            }
+                    return (404, new { success = false, message = "That script is not in the configured Scripts-for-bullshit catalogue." });
+                }
 
-            Console.WriteLine($"[PlayerControl] Started {info.FilePath} in {commandTimer.ElapsedMilliseconds} ms.");
-            return (200, new { success = true, message = $"Started {info.Name}.", path = info.FilePath });
+                Stopwatch commandTimer = Stopwatch.StartNew();
+                Console.WriteLine($"[PlayerControl] {request.Path} requested for {info.FilePath}.");
+                await scripts.DownloadScriptAsync(info, cancellationToken).ConfigureAwait(false);
+                Console.WriteLine($"[PlayerControl] Verified {info.FilePath} in {commandTimer.ElapsedMilliseconds} ms.");
+
+                if (request.Path.EndsWith("/download", StringComparison.OrdinalIgnoreCase))
+                {
+                    return (200, new { success = true, message = $"Downloaded {info.Name}.", path = info.FilePath });
+                }
+
+                if (request.Path.EndsWith("/start", StringComparison.OrdinalIgnoreCase)
+                    && scriptManager.ScriptRunning)
+                {
+                    Console.WriteLine("[PlayerControl] Stopping the active script before starting another.");
+                    await scriptManager.StopScript().ConfigureAwait(false);
+                    if (scriptManager.ScriptRunning)
+                    {
+                        return (409, new
+                        {
+                            success = false,
+                            message = "The active script has not stopped yet. Wait for it to finish stopping, then try again.",
+                            path = info.FilePath
+                        });
+                    }
+                }
+
+                scriptManager.SetLoadedScript(info.LocalFile);
+
+                if (request.Path.EndsWith("/load", StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.WriteLine($"[PlayerControl] Loaded {info.FilePath} in {commandTimer.ElapsedMilliseconds} ms.");
+                    return (200, new { success = true, message = $"Loaded {info.Name}.", path = info.FilePath });
+                }
+
+                Console.WriteLine($"[PlayerControl] Compiling and starting {info.FilePath}.");
+                Exception? startError = await scriptManager.StartScript().ConfigureAwait(false);
+                if (startError is not null)
+                {
+                    Console.WriteLine($"[PlayerControl] Start failed for {info.FilePath}: {startError}");
+                    return (400, new
+                    {
+                        success = false,
+                        message = $"Could not start {info.Name}: {startError.Message}",
+                        path = info.FilePath
+                    });
+                }
+
+                Console.WriteLine($"[PlayerControl] Started {info.FilePath} in {commandTimer.ElapsedMilliseconds} ms.");
+                return (200, new { success = true, message = $"Started {info.Name}.", path = info.FilePath });
+            }
+            finally
+            {
+                scriptCommands.Release();
+            }
         }
 
         if (request.Path.Equals("/api/scripts/stop", StringComparison.OrdinalIgnoreCase))
         {
-            await scriptManager.StopScript().ConfigureAwait(false);
-            return (200, new { success = true, message = "Script stop requested." });
+            await scriptCommands.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await scriptManager.StopScript().ConfigureAwait(false);
+                return (200, new { success = true, message = "Script stop requested." });
+            }
+            finally
+            {
+                scriptCommands.Release();
+            }
         }
 
         if (request.Path.Equals("/api/scripts/pause", StringComparison.OrdinalIgnoreCase))
         {
-            bool requested = root.TryGetProperty("paused", out JsonElement pausedValue)
-                && pausedValue.ValueKind is JsonValueKind.True or JsonValueKind.False
-                ? pausedValue.GetBoolean()
-                : !scriptManager.ScriptPaused;
+            await scriptCommands.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                bool requested = root.TryGetProperty("paused", out JsonElement pausedValue)
+                    && pausedValue.ValueKind is JsonValueKind.True or JsonValueKind.False
+                    ? pausedValue.GetBoolean()
+                    : !scriptManager.ScriptPaused;
 
-            bool accepted = await scriptManager.SetPausedAsync(requested).ConfigureAwait(false);
-            return accepted
-                ? (200, new { success = true, message = requested ? "Script paused." : "Script resumed.", script_paused = scriptManager.ScriptPaused })
-                : (400, new { success = false, message = "The script pause state could not be changed." });
+                bool accepted = await scriptManager.SetPausedAsync(requested).ConfigureAwait(false);
+                return accepted
+                    ? (200, new { success = true, message = requested ? "Script paused." : "Script resumed.", script_paused = scriptManager.ScriptPaused })
+                    : (400, new { success = false, message = "The script pause state could not be changed." });
+            }
+            finally
+            {
+                scriptCommands.Release();
+            }
         }
 
         return (404, new { success = false, message = "Unknown Skua player endpoint." });
@@ -379,6 +420,7 @@ public sealed class PlayerControlServer : IAsyncDisposable
             401 => "Unauthorized",
             404 => "Not Found",
             405 => "Method Not Allowed",
+            409 => "Conflict",
             _ => "Internal Server Error"
         };
 
@@ -438,6 +480,7 @@ public sealed class PlayerControlServer : IAsyncDisposable
         {
         }
 
+        scriptCommands.Dispose();
         shutdown.Dispose();
     }
 
