@@ -123,7 +123,12 @@ public final class PlayerHostLauncher {
 
         while (System.nanoTime() < deadline) {
             if (!process.isAlive()) {
-                return LaunchResult.failed("The Skua player host stopped during startup. Check config/skuacraft/logs/player-host.log.");
+                int exitCode = process.exitValue();
+                return LaunchResult.failed(
+                        "The Skua player host exited during startup (code " + exitCode + "). Check "
+                                + "config/skuacraft/logs/player-host.log and "
+                                + "config/skuacraft/logs/player-host-startup.log."
+                );
             }
 
             LaunchResult result = readSession(sessionFile);
