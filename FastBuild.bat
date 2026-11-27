@@ -1,13 +1,21 @@
 @echo off
 setlocal
-title SkuaCraft Fast Build and Install
+title SkuaCraft Fast Build, Install and Package
 
 set "SCRIPT_DIR=%~dp0"
 set "BUILD_SCRIPT=%SCRIPT_DIR%Build.ps1"
+set "INSTALLER_SCRIPT=%SCRIPT_DIR%installer\Build-Installer.ps1"
 
 if not exist "%BUILD_SCRIPT%" (
     echo [ERROR] Build.ps1 was not found.
     echo Expected: "%BUILD_SCRIPT%"
+    pause
+    exit /b 1
+)
+
+if not exist "%INSTALLER_SCRIPT%" (
+    echo [ERROR] Installer build script was not found.
+    echo Expected: "%INSTALLER_SCRIPT%"
     pause
     exit /b 1
 )
@@ -22,12 +30,28 @@ if errorlevel 1 (
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%BUILD_SCRIPT%" -FastInstall
 set "BUILD_EXIT=%ERRORLEVEL%"
 
-echo.
-if "%BUILD_EXIT%"=="0" (
-    echo [SUCCESS] SkuaCraft was built and installed.
-) else (
-    echo [FAILED] Fast build exited with code %BUILD_EXIT%.
+if not "%BUILD_EXIT%"=="0" (
+    goto build_failed
 )
 
+echo.
+echo [SKUA] Building the guided Windows installer...
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%INSTALLER_SCRIPT%"
+set "BUILD_EXIT=%ERRORLEVEL%"
+
+if not "%BUILD_EXIT%"=="0" (
+    goto build_failed
+)
+
+echo.
+echo [SUCCESS] SkuaCraft was built, installed and packaged.
+echo Installer output: "%SCRIPT_DIR%release"
+goto finish
+
+:build_failed
+echo.
+echo [FAILED] Fast build exited with code %BUILD_EXIT%.
+
+:finish
 pause
 exit /b %BUILD_EXIT%
