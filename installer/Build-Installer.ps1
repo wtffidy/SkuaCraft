@@ -19,7 +19,7 @@ function Get-InnoSetupCompiler {
     )
 
     $Command = Get-Command ISCC.exe -ErrorAction SilentlyContinue
-    if ($Command?.Source) {
+    if (($null -ne $Command) -and $Command.Source) {
         $Candidates += $Command.Source
     }
 
