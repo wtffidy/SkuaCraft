@@ -45,9 +45,9 @@ try {
     }
 
     $headers = @{ "X-SkuaCraft-Token" = $state.controlToken }
-    $scriptList = Invoke-RestMethod -Uri ($state.controlUrl + "scripts") -Headers $headers -Method Get -TimeoutSec 20
+    $scriptList = Invoke-RestMethod -Uri ($state.controlUrl + "scripts") -Headers $headers -Method Get -TimeoutSec 90
     if (-not $scriptList.success -or $scriptList.count -lt 1000) {
-        throw "The fork script catalogue did not load. Count: $($scriptList.count)"
+        throw "The auqw/Scripts upstream catalogue did not load. Expected at least 1,000 entries; received $($scriptList.count)."
     }
 
     $status = Invoke-RestMethod -Uri ($state.controlUrl + "status") -Headers $headers -Method Get -TimeoutSec 20
