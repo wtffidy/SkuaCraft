@@ -1,7 +1,8 @@
 [CmdletBinding()]
 param(
     [Alias("SkipFolderPicker")]
-    [switch]$SkipPrompts
+    [switch]$SkipPrompts,
+    [switch]$FastInstall
 )
 
 $ErrorActionPreference = "Stop"
@@ -501,7 +502,90 @@ if (-not (Test-Path -LiteralPath $PlayerHostExecutable -PathType Leaf)) {
 
 Write-Host "[SUCCESS] PlayerHost published: $PlayerHostExecutable" -ForegroundColor Green
 
-if (-not $SkipPrompts) {
+if ($FastInstall) {
+    Write-Host ""
+    Write-Host "[FAST BUILD] Installing both outputs into one Minecraft instance." -ForegroundColor Cyan
+
+    $LastInstancePath = Get-LastUsedDirectory "last-instance-path"
+    if ([string]::IsNullOrWhiteSpace($LastInstancePath)) {
+        $InstancePath = Read-Host "Minecraft instance folder (the folder containing mods and config)"
+    }
+    else {
+        $InstancePath = Read-Host "Minecraft instance folder (press Enter to reuse '$LastInstancePath')"
+        if ([string]::IsNullOrWhiteSpace($InstancePath)) {
+            $InstancePath = $LastInstancePath
+        }
+    }
+
+    $InstancePath = [Environment]::ExpandEnvironmentVariables($InstancePath.Trim().Trim('"').Trim("'"))
+    if ([string]::IsNullOrWhiteSpace($InstancePath)) {
+        throw "No Minecraft instance folder was provided."
+    }
+
+    $InstancePath = [IO.Path]::GetFullPath($InstancePath)
+    if (-not (Test-Path -LiteralPath $InstancePath -PathType Container)) {
+        throw "Minecraft instance folder does not exist: $InstancePath"
+    }
+
+    if (-not (Test-Path -LiteralPath (Join-Path $InstancePath "mods") -PathType Container) -and
+        -not (Test-Path -LiteralPath (Join-Path $InstancePath "config") -PathType Container)) {
+        throw "The selected folder does not look like a Minecraft instance (mods/config folder not found): $InstancePath"
+    }
+
+    $ModsDestination = Join-Path $InstancePath "mods"
+    $HostDestination = Join-Path $InstancePath "config\skuacraft\player-host"
+    New-Item -ItemType Directory -Path $ModsDestination -Force | Out-Null
+    New-Item -ItemType Directory -Path $HostDestination -Force | Out-Null
+
+    $InstalledHostExecutable = Join-Path $HostDestination "SkuaCraft.PlayerHost.exe"
+    $RunningHost = @(Get-CimInstance -ClassName Win32_Process -Filter "Name = 'SkuaCraft.PlayerHost.exe'" -ErrorAction SilentlyContinue |
+        Where-Object {
+            try {
+                $_.ExecutablePath -and [IO.Path]::GetFullPath($_.ExecutablePath) -ieq [IO.Path]::GetFullPath($InstalledHostExecutable)
+            }
+            catch {
+                $false
+            }
+        })
+
+    if ($RunningHost.Count -gt 0) {
+        throw "Cannot update this instance's PlayerHost while it is running. Close the Minecraft instance using '$InstalledHostExecutable', then rerun FastBuild.bat."
+    }
+
+    $InstallJars = @(Get-ChildItem -LiteralPath $DistributionDirectory -Filter "*.jar" -File -ErrorAction SilentlyContinue)
+    if ($InstallJars.Count -eq 0) {
+        throw "No built SkuaCraft JAR was found in: $DistributionDirectory"
+    }
+
+    if (-not (Test-Path -LiteralPath $PlayerHostExecutable -PathType Leaf)) {
+        throw "The published PlayerHost executable was not found: $PlayerHostExecutable"
+    }
+
+    foreach ($Artifact in $InstallJars) {
+        $JarDestination = Join-Path $ModsDestination $Artifact.Name
+        Copy-Item -LiteralPath $Artifact.FullName -Destination $JarDestination -Force -ErrorAction Stop
+        Write-Host "[OK] Installed mod JAR: $JarDestination" -ForegroundColor Green
+    }
+
+    try {
+        Copy-Item -Path (Join-Path $PlayerHostPublishDirectory "*") -Destination $HostDestination -Recurse -Force -ErrorAction Stop
+    }
+    catch {
+        throw "Could not install PlayerHost to '$HostDestination'. Details: $($_.Exception.Message)"
+    }
+
+    if (-not (Test-Path -LiteralPath $InstalledHostExecutable -PathType Leaf)) {
+        throw "PlayerHost installation did not produce the expected executable: $InstalledHostExecutable"
+    }
+
+    Save-LastUsedDirectory -SettingName "last-instance-path" -Path $InstancePath
+    Write-Host ""
+    Write-Host "[SUCCESS] Fast build and install completed." -ForegroundColor Green
+    Write-Host "Minecraft instance: $InstancePath"
+    Write-Host "Mod JAR folder:     $ModsDestination"
+    Write-Host "PlayerHost folder:  $HostDestination"
+}
+elseif (-not $SkipPrompts) {
     Write-Host ""
     $CopyJar = Read-Host "Copy the built SkuaCraft JAR to another folder? (Y/N)"
 
