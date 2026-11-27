@@ -63,5 +63,11 @@ finally {
         }
     }
 
+    $process.Refresh()
+    if ($process.HasExited -and $process.ExitCode -ne 0) {
+        Get-Content $stdout, $stderr -ErrorAction SilentlyContinue
+        throw "Skua player host failed during shutdown with code $($process.ExitCode)."
+    }
+
     Remove-Item $session, $stop -Force -ErrorAction SilentlyContinue
 }
