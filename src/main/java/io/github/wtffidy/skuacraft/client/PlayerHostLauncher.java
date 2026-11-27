@@ -98,6 +98,10 @@ public final class PlayerHostLauncher {
                         .redirectErrorStream(true)
                         .redirectOutput(ProcessBuilder.Redirect.appendTo(logFile.toFile()));
 
+                // Skua compiles included script files in parallel using Environment.ProcessorCount.
+                // Keep the embedded player from starving Minecraft and Rinku during large compiles.
+                processBuilder.environment().put("DOTNET_PROCESSOR_COUNT", "4");
+
                 playerHostProcess = processBuilder.start();
                 LaunchResult result = waitForSession(
                         playerHostProcess,
