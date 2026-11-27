@@ -404,7 +404,7 @@ public static class Program
     private static T GetRequiredServiceWithFileLockRetry<T>(IServiceProvider serviceProvider, string serviceName)
         where T : notnull
     {
-        const int maxAttempts = 8;
+        const int maxAttempts = 30;
         IOException? lastException = null;
 
         for (int attempt = 1; attempt <= maxAttempts; attempt++)
@@ -424,7 +424,7 @@ public static class Program
                 Console.WriteLine(
                     $"[Startup] {serviceName} hit a temporary file lock. Retrying ({attempt}/{maxAttempts - 1})."
                 );
-                Thread.Sleep(500);
+                Thread.Sleep(1000);
             }
         }
 
