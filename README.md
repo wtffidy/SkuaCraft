@@ -69,7 +69,7 @@ git clone --recurse-submodules https://github.com/wtffidy/SkuaCraft.git
 cd SkuaCraft
 ~~~
 
-Minecraft mod requirements: JDK 17. On Windows, run `Build.bat`; it searches common JDK 17 install locations and existing Gradle 8.8 installations, then downloads the official Gradle 8.8 distribution (with SHA-256 verification) into the local SkuaCraft tools folder if needed.
+Minecraft mod requirements: JDK 17. On Windows, run `Build.bat`; it searches common JDK 17 install locations and existing Gradle 8.8 installations. If JDK 17 is missing, it downloads a SHA-256-verified Eclipse Temurin JDK 17 into the local SkuaCraft tools folder without changing your system Java. It also downloads the official Gradle 8.8 distribution (with SHA-256 verification) when needed.
 
 ~~~bat
 Build.bat
