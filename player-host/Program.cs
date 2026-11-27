@@ -46,6 +46,7 @@ public static class Program
         Console.CancelKeyPress += (_, eventArgs) =>
         {
             eventArgs.Cancel = true;
+            WriteStartupDiagnostic(startupLogFile, "[Startup] Console.CancelKeyPress received.");
             shutdown.Cancel();
         };
 
@@ -80,25 +81,34 @@ public static class Program
             using PlayerScriptDiagnostics scriptDiagnostics = new();
             Console.WriteLine($"[Runtime] PlayerHost is limited to {Environment.ProcessorCount} logical processors.");
 
+            WriteStartupDiagnostic(startupLogFile, "[Startup] Initializing Skua client files.");
             IClientFilesService clientFiles = serviceProvider.GetRequiredService<IClientFilesService>();
             clientFiles.CreateDirectories();
             clientFiles.CreateFiles();
+            WriteStartupDiagnostic(startupLogFile, "[Startup] Skua client files initialized.");
 
+            WriteStartupDiagnostic(startupLogFile, "[Startup] Initializing Skua settings.");
             ISettingsService settings = serviceProvider.GetRequiredService<ISettingsService>();
             settings.SetApplicationVersion();
+            WriteStartupDiagnostic(startupLogFile, "[Startup] Skua settings initialized.");
 
+            WriteStartupDiagnostic(startupLogFile, "[Startup] Initializing Skua plugins.");
             IPluginManager plugins = serviceProvider.GetRequiredService<IPluginManager>();
             plugins.Initialize();
+            WriteStartupDiagnostic(startupLogFile, "[Startup] Skua plugins initialized.");
 
+            WriteStartupDiagnostic(startupLogFile, "[Startup] Resolving Skua script interface.");
             IScriptInterface bot = GetRequiredServiceWithFileLockRetry<IScriptInterface>(
                 serviceProvider,
                 "Skua script interface"
             );
+            WriteStartupDiagnostic(startupLogFile, "[Startup] Resolving Skua managers and Ruffle services.");
             IScriptInterfaceManager botManager = serviceProvider.GetRequiredService<IScriptInterfaceManager>();
             IScriptManager scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
             IGetScriptsService scriptCatalogue = serviceProvider.GetRequiredService<IGetScriptsService>();
             RuffleFlashUtil flash = serviceProvider.GetRequiredService<RuffleFlashUtil>();
             RuffleHost playerHost = serviceProvider.GetRequiredService<RuffleHost>();
+            WriteStartupDiagnostic(startupLogFile, "[Startup] Skua managers and Ruffle services resolved.");
             string rufflePortFile = GetRufflePortFilePath(sessionFile);
             int savedRufflePort = ReadRufflePort(rufflePortFile);
             if (savedRufflePort > 0)
@@ -157,9 +167,9 @@ public static class Program
                 }
             }
         }
-        catch (OperationCanceledException)
+        catch (OperationCanceledException exception) when (shutdown.IsCancellationRequested)
         {
-            WriteStartupDiagnostic(startupLogFile, "[Startup] Shutdown cancellation received.");
+            WriteStartupDiagnostic(startupLogFile, $"[Startup] Shutdown cancellation received: {exception.Message}");
             return 0;
         }
         catch (Exception exception)
@@ -170,6 +180,7 @@ public static class Program
         }
         finally
         {
+            WriteStartupDiagnostic(startupLogFile, "[Startup] Cleaning up the player session file.");
             TryDeleteFile(sessionFile);
         }
     }
