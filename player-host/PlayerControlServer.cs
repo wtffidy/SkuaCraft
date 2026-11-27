@@ -252,8 +252,14 @@ public sealed class PlayerControlServer : IAsyncDisposable
                     return (200, new { success = true, message = $"Loaded {info.Name}.", path = info.FilePath });
                 }
 
-                Console.WriteLine($"[PlayerControl] Compiling and starting {info.FilePath}.");
+                Stopwatch scriptStartTimer = Stopwatch.StartNew();
+                Console.WriteLine($"[PlayerControl] Compile/start pipeline entered for {info.FilePath}.");
                 Exception? startError = await scriptManager.StartScript().ConfigureAwait(false);
+                Console.WriteLine(
+                    $"[PlayerControl] Compile/start pipeline returned after {scriptStartTimer.ElapsedMilliseconds} ms; "
+                    + $"running={scriptManager.ScriptRunning}, loaded={scriptManager.LoadedScript}."
+                );
+
                 if (startError is not null)
                 {
                     Console.WriteLine($"[PlayerControl] Start failed for {info.FilePath}: {startError}");
