@@ -68,13 +68,13 @@ git clone --recurse-submodules https://github.com/wtffidy/SkuaCraft.git
 cd SkuaCraft
 ~~~
 
-Requirements: JDK 17, .NET 10 SDK, and Windows x64. Run `Build.bat`; it builds both the Minecraft mod and self-contained Windows PlayerHost. It searches common JDK 17 install locations and existing Gradle 8.8 installations. If JDK 17 or Gradle 8.8 is missing, it downloads the verified distributions into the local SkuaCraft tools folder without changing your system Java.
+Requirements: JDK 17, .NET 10 SDK, and Windows x64. Run `Build.bat`; it builds the Minecraft mod, self-contained Windows PlayerHost and guided Windows installer. It searches common JDK 17 install locations and existing Gradle 8.8 installations. If JDK 17 or Gradle 8.8 is missing, it downloads the verified distributions into the local SkuaCraft tools folder without changing your system Java. If Inno Setup 6 is missing, the installer build attempts to install it for the current user through WinGet.
 
 ~~~bat
 Build.bat
 ~~~
 
-The mod JAR is copied into the repository's `build/` folder, and PlayerHost is published to `player-host/publish/win-x64/`. At the end, the build asks whether to copy the JAR elsewhere. Answer `Y` and paste the destination folder path (usually your instance's `mods` folder). It then asks whether to install PlayerHost. Answer `Y` and paste the Minecraft instance root path (the folder containing `mods` and/or `config`). PlayerHost is copied automatically into `config/skuacraft/player-host/`. No folder picker is used.
+The mod JAR is copied into the repository's `build/` folder, PlayerHost is published to `player-host/publish/win-x64/`, and the installer EXE is written to `release/SkuaCraft-Setup-<version>.exe`. The `installer/` folder contains the installer source and build script, not the compiled EXE. At the end, the build asks whether to copy the JAR elsewhere. Answer `Y` and paste the destination folder path (usually your instance's `mods` folder). It then asks whether to install PlayerHost. Answer `Y` and paste the Minecraft instance root path (the folder containing `mods` and/or `config`). PlayerHost is copied automatically into `config/skuacraft/player-host/`. No folder picker is used.
 
 ## 🔐 Local runtime safety
 
