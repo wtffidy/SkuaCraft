@@ -48,10 +48,10 @@ The MVS v1.0.6 source is pinned as a Git submodule at vendor/MVS. The desktop Vi
 
 ## 📦 Installation
 
-The Minecraft mod and Windows player host are built as separate CI artifacts.
+The Minecraft mod and Windows player host are distributed through GitHub Releases and prereleases.
 
-1. Install the SkuaCraft mod JAR and its required Rinku 3.0.4 library in the Project Infinity instance.
-2. Download the **SkuaCraft PlayerHost win-x64** artifact from the same GitHub Actions run.
+1. Download the mod JAR and Windows PlayerHost package from the latest SkuaCraft GitHub Release or prerelease.
+2. Install the mod JAR and its required Rinku 3.0.4 library in the Project Infinity instance.
 3. Extract the player-host files into:
    <escape><code>&lt;Minecraft instance&gt;/config/skuacraft/player-host/</code></escape>
 4. Launch Minecraft, equip the Skua Console and right-click it.
@@ -82,7 +82,7 @@ git submodule update --init --recursive
 ./player-host/Publish-PlayerHost.ps1
 ~~~
 
-The script publishes a self-contained player host to player-host/publish/win-x64/.
+The mod build copies the install-ready JAR into `dist/` at the repository root. The script publishes a self-contained player host to player-host/publish/win-x64/.
 
 ## 🔐 Local runtime safety
 
