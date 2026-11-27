@@ -1,5 +1,7 @@
 [CmdletBinding()]
-param()
+param(
+    [switch]$SkipFolderPicker
+)
 
 $ErrorActionPreference = "Stop"
 $GradleVersion = "8.8"
@@ -357,10 +359,10 @@ if ($Artifacts.Count -eq 0) {
     throw "Gradle completed, but no mod JAR was found in build\libs."
 }
 
-$DistributionDirectory = Join-Path $ProjectRoot "dist"
+$DistributionDirectory = Join-Path $ProjectRoot "build"
 New-Item -ItemType Directory -Path $DistributionDirectory -Force | Out-Null
 
-# Remove old JARs so dist always represents the latest successful build.
+# Remove old copied JARs so the build folder always represents the latest successful build.
 Get-ChildItem $DistributionDirectory -Filter "*.jar" -File -ErrorAction SilentlyContinue |
     Remove-Item -Force
 
@@ -378,3 +380,33 @@ foreach ($Artifact in $Artifacts) {
 Write-Host "Ready-to-install JAR:"
 Get-ChildItem $DistributionDirectory -Filter "*.jar" -File |
     ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Green }
+if (-not $SkipFolderPicker) {
+    Write-Host ""
+    $SelectFolder = Read-Host "Select another folder for the built JAR? (Y/N)"
+
+    if ($SelectFolder -match '^(?i)y(es)?$') {
+        try {
+            Add-Type -AssemblyName System.Windows.Forms
+            $FolderDialog = [System.Windows.Forms.FolderBrowserDialog]::new()
+            $FolderDialog.Description = "Choose where to copy the SkuaCraft JAR"
+            $FolderDialog.ShowNewFolderButton = $true
+
+            if ($FolderDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK -and
+                -not [string]::IsNullOrWhiteSpace($FolderDialog.SelectedPath)) {
+                foreach ($Artifact in @(Get-ChildItem $DistributionDirectory -Filter "*.jar" -File)) {
+                    $SelectedDestination = Join-Path $FolderDialog.SelectedPath $Artifact.Name
+                    Copy-Item -LiteralPath $Artifact.FullName -Destination $SelectedDestination -Force
+                    Write-Host "[OK] Copied to: $SelectedDestination" -ForegroundColor Green
+                }
+            }
+            else {
+                Write-Host "[INFO] Folder selection cancelled. JAR remains in the build folder." -ForegroundColor Yellow
+            }
+        }
+        finally {
+            if ($FolderDialog) {
+                $FolderDialog.Dispose()
+            }
+        }
+    }
+}
