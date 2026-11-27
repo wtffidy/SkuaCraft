@@ -314,8 +314,9 @@ if ($LASTEXITCODE -ne 0 -or $OriginUrl -notmatch '(?i)github\.com[:/]wtffidy/Sku
     throw "The origin remote must point to https://github.com/wtffidy/SkuaCraft. Current origin: '$OriginUrl'."
 }
 
+$IsGitHubActions = $env:GITHUB_ACTIONS -eq "true"
 $CurrentBranch = (& git -C $ProjectRoot branch --show-current 2>&1 | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or $CurrentBranch -ne "main") {
+if (-not $IsGitHubActions -and ($LASTEXITCODE -ne 0 -or $CurrentBranch -ne "main")) {
     throw "Builds must run from the main branch. Current branch: '$CurrentBranch'. Switch to main and rerun Build.bat."
 }
 
@@ -327,15 +328,22 @@ if ($WorkingTree.Count -gt 0) {
     throw "Your SkuaCraft working tree has local changes. Commit or stash them before building so the automatic update cannot overwrite your work."
 }
 
-Write-Host "[GIT] Fetching the latest SkuaCraft main..." -ForegroundColor Cyan
-& git -C $ProjectRoot fetch origin main
-if ($LASTEXITCODE -ne 0) {
-    throw "Git fetch failed. Check your connection and the origin remote, then rerun Build.bat."
+if ($IsGitHubActions) {
+    # Actions checks out the exact commit under test in detached-HEAD mode.
+    # Do not pull main here or replace the commit that triggered this workflow.
+    Write-Host "[GIT] GitHub Actions detected; using the checked-out commit." -ForegroundColor Cyan
 }
+else {
+    Write-Host "[GIT] Fetching the latest SkuaCraft main..." -ForegroundColor Cyan
+    & git -C $ProjectRoot fetch origin main
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git fetch failed. Check your connection and the origin remote, then rerun Build.bat."
+    }
 
-& git -C $ProjectRoot pull --ff-only origin main
-if ($LASTEXITCODE -ne 0) {
-    throw "Git could not fast-forward main. Resolve the local branch state manually, then rerun Build.bat."
+    & git -C $ProjectRoot pull --ff-only origin main
+    if ($LASTEXITCODE -ne 0) {
+        throw "Git could not fast-forward main. Resolve the local branch state manually, then rerun Build.bat."
+    }
 }
 
 Write-Host "[GIT] Updating pinned submodules..." -ForegroundColor Cyan
