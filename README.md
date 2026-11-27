@@ -95,14 +95,6 @@ The mod JAR is copied into the repository's `build/` folder, and PlayerHost is p
 
 SkuaCraft reads the live catalogue from the upstream `auqw/Scripts` `Skua` branch, downloads official script files directly from that branch, and checks its metadata for updates. SkuaCraft does not generate, author or modify AQW scripts.
 
-## 🚧 Development status
-
-The repository now contains the first embedded-player path: the handheld screen, Rinku browser integration, hidden .NET player-host project and pinned MVS runtime source.
-
-The next verification gate is a real end-to-end run in the Project Infinity instance: Ruffle loads the Skua SWF, AQW login succeeds, input and audio work, and the game state reaches Skua Core. Minecraft-native Skua tool screens and the two-hand handheld animation follow that proof of concept. The current screenshot service still returns a transparent placeholder because Rinku's Minecraft-owned render texture is not yet bridged back to the separate .NET process.
-
-**The player host compiling is not the same as a verified live AQW session.** The full in-game login/play test still needs to pass before this can be called a working release.
-
 ---
 
 <p align="center">
