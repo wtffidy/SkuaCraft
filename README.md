@@ -1,117 +1,101 @@
 # 🥔 SkuaCraft
 
-### Your Skua control deck. Now held in your Minecraft hands.
+### The real Skua player, living inside Minecraft.
 
 <p align="center">
-  <strong>A Forge 1.20.1 companion mod for VibeSkua</strong><br/>
-  A pocket-sized command center, not another script editor.
+  <strong>Forge 1.20.1 · Project Infinity 0.1 · Java 17</strong><br/>
+  A handheld in-world console for playing AdventureQuest Worlds with the Skua client.
 </p>
 
 <p align="center">
   <img alt="Minecraft" src="https://img.shields.io/badge/Minecraft-1.20.1-3C8527?style=for-the-badge&logo=minecraft&logoColor=white" />
   <img alt="Forge" src="https://img.shields.io/badge/Forge-47.4.28-orange?style=for-the-badge" />
   <img alt="Java" src="https://img.shields.io/badge/Java-17-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white" />
-  <img alt="Status" src="https://img.shields.io/badge/Status-Early%20Development-8B5CF6?style=for-the-badge" />
+  <img alt="Status" src="https://img.shields.io/badge/Status-Player%20Integration%20Prototype-8B5CF6?style=for-the-badge" />
 </p>
 
 ---
 
-## ✨ The idea
+## 🎮 The actual goal
 
-SkuaCraft brings the VibeSkua remote-control experience into Minecraft.
+SkuaCraft is **not** a remote-control dashboard for a separate VibeSkua window.
 
-Craft a **Skua Console**, hold it in your main hand, and right-click. The console opens a custom in-game control deck with live player status and direct controls for the Skua client running on your computer.
+The goal is to run the actual AQW game client and Skua runtime as a playable experience inside Minecraft:
 
-Minecraft is the cockpit. VibeSkua remains the engine.
+1. Equip the Skua Console in Minecraft.
+2. Open it and see the real AQW game rendered on the handheld display.
+3. Log in and play from the Minecraft screen using mouse and keyboard input.
+4. Access Skua's script loader, automation, inventory helpers, quests, options, logs and other client tools without switching to a separate desktop Skua window.
+5. Close the console and return to the Minecraft world.
 
-This project does **not** attempt to execute AQW scripts inside Minecraft or reimplement the Skua bot runtime. It talks to the real VibeSkua client through its existing HTTP API, so script execution and game state stay where they belong.
+The handheld is the front end. The game renderer, Skua runtime and script engine are the real player behind it.
 
-## 🎮 The console
-
-| Deck | What it is for |
-| --- | --- |
-| **Dashboard** | Live connection, player stats, location and script state |
-| **Scripts** | Browse, select, load and start scripts already exposed by VibeSkua |
-| **Controls** | Attack, skills, rest and jump-to-spawn |
-| **Inventory** | Bag/bank browsing, equip, deposit and withdraw |
-| **Quests** | Requirements, readiness checks and quest completion |
-| **Drops** | Select/pick up a drop or collect all |
-| **Chat** | Recent chat feed and zone-message sending |
-| **Logs** | Latest script telemetry |
-| **Options** | Live client option toggles |
-| **Fleet** | Running tabs, active-tab selection and Army Queue basics |
-
-The first-person item model is designed as a small rugged handheld: dark casing, luminous teal display, tactile controls and a little violet Skua personality. The in-game screen follows the same visual language.
-
-## 📦 Target pack
-
-The primary compatibility target is **Project Infinity 0.1**, release **0.0.52.1**:
+## 🧱 Target environment
 
 | Component | Target |
 | --- | --- |
+| Modpack | Project Infinity 0.1, release 0.0.52.1 |
 | Minecraft | 1.20.1 |
-| Mod loader | Forge |
-| Forge build | 47.4.28 |
+| Loader | Forge 47.4.28 |
 | Java | 17 |
-| Distribution | Client-side control interface; install on both sides when required by the server's Forge mod list |
+| Initial platform | Windows x64 |
+| Skua runtime | MVS/Ruffle-derived .NET 10 host with Skua Core |
 
-The mod is intentionally built for the pack's exact 1.20.1 Forge generation rather than chasing unrelated Minecraft versions.
+## 🧠 Player architecture
 
-## 🔌 Connection model
+The desktop VibeSkua window cannot simply be embedded: its current Avalonia game host uses a Windows Shockwave Flash ActiveX/WinForms control.
 
-SkuaCraft connects to the VibeSkua remote-control service.
+The portable route is based on the working player stack in [MVS v1.0.6](https://github.com/Arglax/MVS/tree/v1.0.6):
 
-- Default host: `127.0.0.1`
-- Default port: `8088`
-- Protocol: HTTP + JSON
-- Default connection target: the same computer running Minecraft and VibeSkua
-- Network calls: asynchronous, with short request timeouts
+- **Ruffle** renders the AQW SWF in Chromium/WebAssembly.
+- **Skua.Flash.Ruffle** hosts the local game page, proxies game traffic and bridges Flash ExternalInterface calls to Skua's `IFlashUtil`.
+- **Skua Core** remains responsible for the game model, bot APIs, scripts and automation.
+- **Rinku** is the preferred Minecraft-side Chromium library candidate for Forge 1.20.1. It can render a controllable browser view into Minecraft's OpenGL texture pipeline.
+- **SkuaCraft** owns the handheld item, first-person presentation, input forwarding and Minecraft-native navigation.
+- A local .NET 10 player host will run alongside the Minecraft client. It is a bundled implementation detail, not a separate desktop window the player has to operate.
 
-VibeSkua currently binds its gateway to all interfaces in its standard configuration. Keep the default SkuaCraft host on loopback unless you deliberately configure a trusted LAN connection. Do not expose the remote-control port to the public internet.
+The browser and runtime will communicate over loopback only. The player host must not expose its local control channel to the LAN.
 
-Connection settings live in `config/skuacraft-client.toml` after the first launch.
+See [PLAYER-ARCHITECTURE.md](docs/PLAYER-ARCHITECTURE.md) for the integration plan and boundaries.
 
-## 🧭 Project map
+## 📟 The handheld
 
-- `src/main/java` — Forge mod, console item, screen and API client
-- `src/main/resources` — item model, texture, recipe and mod metadata
-- `docs/INTEGRATION.md` — verified VibeSkua API map
-- `docs/PROJECT-INFINITY.md` — pack compatibility notes
-- `docs/NOTES.md` — design notes and implementation decisions
+The Skua Console is the in-world entry point: graphite hardware, a luminous display, tactile controls and a first-person held presentation. Its screen must show the live AQW player, not a mock dashboard.
 
-## 🛠️ Build from source
+Planned display modes include a full game view, a compact control rail, and expandable Skua tools. The two-hand held pose and close-up device framing are part of the product, not optional decoration.
 
-Requirements: Java 17 and Gradle 8.8.
+## 📚 Source projects
+
+| Source | Role |
+| --- | --- |
+| [wtffidy/VibeSkua](https://github.com/wtffidy/VibeSkua) | Skua client behavior, core and script/runtime reference |
+| [Arglax/MVS v1.0.6](https://github.com/Arglax/MVS/tree/v1.0.6) | Proven Ruffle player host and portable Skua integration reference |
+| [Rinku](https://github.com/Keksuccino/Rinku) | Minecraft Chromium rendering library candidate |
+| [Scripts-for-bullshit / Skua](https://github.com/wtffidy/Scripts-for-bullshit/tree/Skua) | Script metadata and category reference only |
+
+The scripts repository remains reference material. SkuaCraft does not generate scripts or replace the existing script workflow.
+
+## 🛠️ Build
+
+The Minecraft mod targets Java 17, Forge 47.4.28 and Gradle 8.8.
 
 ```bash
 gradle build
 ```
 
-The built mod is written to `build/libs/`.
-
 On Windows, run `Build.bat`.
 
-The GitHub Actions workflow builds the project and publishes the JAR as a workflow artifact.
+The player host is a separate .NET 10 component and will be published and packaged with the mod once the runtime integration is in place.
 
-## 🧪 Development status
+## 🚧 Development status
 
-This repository is the start of the implementation, not a claim that every Skua feature has shipped. The first milestone is the Forge foundation, crafted handheld, polished screen shell and reliable connection to the existing VibeSkua API. Further panels will be filled in against verified endpoint behavior.
+The current repository contains an initial Forge project and a previous remote-control UI experiment. That experiment is **not the product goal** and will be superseded by the embedded AQW player.
 
-See [the notes](docs/NOTES.md) and [integration reference](docs/INTEGRATION.md) for scope, caveats and next steps.
-
-## 🔗 Source projects
-
-| Project | Role |
-| --- | --- |
-| [wtffidy/VibeSkua](https://github.com/wtffidy/VibeSkua) | Primary client and remote-control API |
-| [wtffidy/Scripts-for-bullshit](https://github.com/wtffidy/Scripts-for-bullshit/tree/Skua) | Script categories and metadata reference only; SkuaCraft does not author scripts |
-| [Arglax/MVS v1.0.6](https://github.com/Arglax/MVS/releases/tag/v1.0.6) | Contingency research/reference if the desktop client path ever proves insufficient |
-
-The source projects are references and integration targets. SkuaCraft is developed independently.
+The next milestone is a proof of concept that opens the MVS-derived Ruffle game page inside Minecraft, renders it through Rinku, and forwards mouse/keyboard input correctly. Only after that works does it make sense to fill out the Skua tool panels and polish the handheld presentation.
 
 ---
 
 <p align="center">
   <strong>SKUA SYSTEMS</strong><br/>
-  <sub>One tiny console. A whole lot of bot control.</sub> 🥔
+  <sub>One handheld. The actual game. The actual Skua.</sub> 🥔
 </p>
