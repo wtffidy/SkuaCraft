@@ -411,7 +411,7 @@ public static class Program
         {
             try
             {
-                return rootServices.GetRequiredService<T>();
+                return serviceProvider.GetRequiredService<T>();
             }
             catch (IOException exception) when (IsFileSharingViolation(exception))
             {
