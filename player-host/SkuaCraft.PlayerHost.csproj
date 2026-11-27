@@ -17,4 +17,7 @@
     <ProjectReference Include="..\vendor\MVS\src\Skua.Core\Skua.Core.csproj" />
     <ProjectReference Include="..\vendor\MVS\src\Skua.Flash.Ruffle\Skua.Flash.Ruffle.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="ScriptCatalogue.json" LogicalName="SkuaCraft.PlayerHost.ScriptCatalogue.json" />
+  </ItemGroup>
 </Project>

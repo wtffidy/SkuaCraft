@@ -104,6 +104,10 @@ public static class Program
         Skua.Core.AppStartup.Services.AddCommonServices(services);
         services.AddTransient(Skua.Core.AppStartup.Services.CreateCompiler);
 
+        services.AddSingleton<IGetScriptsService, PlayerScriptsService>();
+        services.AddSingleton<ICustomScriptService, CustomScriptService>();
+        services.AddSingleton<IScriptPathResolver, ScriptPathResolver>();
+
         services.AddSingleton<ISettingsService, PlayerSettingsService>();
         services.AddSingleton<IDialogService, PlayerDialogService>();
         services.AddSingleton<IDispatcherService, PlayerDispatcherService>();
