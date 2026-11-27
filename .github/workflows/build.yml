@@ -70,7 +70,7 @@ jobs:
         run: |
           $ErrorActionPreference = "Stop"
           $gradleText = Get-Content ./build.gradle -Raw
-          $versionMatch = [regex]::Match($gradleText, "(?m)^version\s*=\s*'([^']+)'")
+          $versionMatch = [regex]::Match($gradleText, "getOrElse\('([^']+)'\)")
           if (-not $versionMatch.Success) {
             throw "Could not read the project version from build.gradle."
           }
