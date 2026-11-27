@@ -18,6 +18,7 @@ public final class SkuaPlayerScreen extends Screen {
     private static final int SCREEN_EDGE = 0xFF324658;
     private static final int SCREEN_FILL = 0xFF020508;
     private static final int TEAL = 0xFF57E6C1;
+    private static final int TEAL_DARK = 0xFF1B766F;
     private static final int VIOLET = 0xFFB18AF5;
     private static final int TEXT = 0xFFE8F1F4;
     private static final int MUTED = 0xFF91A5B4;
