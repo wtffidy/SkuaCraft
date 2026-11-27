@@ -196,9 +196,9 @@ public final class SkuaPlayerScreen extends Screen {
         graphics.fill(browserX, browserY,
                 browserX + browserWidth, browserY + browserHeight, SCREEN_FILL);
 
-        graphics.drawString(font, "SKUA SYSTEMS  /  HANDHELD PLAYER", 21, 20, TEAL, false);
-        graphics.drawString(font, "RINKU  " + (rinkuReady ? "READY" : "STARTING"),
-                width - 170, 20, rinkuReady ? TEAL : MUTED, false);
+        graphics.drawString(font, "SKUA SYSTEMS", 21, 20, TEAL, false);
+        graphics.drawString(font, hostReady ? "PLAYER READY" : "PLAYER STARTING",
+                width - 170, 20, hostReady ? TEAL : MUTED, false);
         graphics.fill(width - 83, 12, width - 12, 34, toolsPanel.isOpen() ? TEAL_DARK : 0xFF233447);
         graphics.drawCenteredString(font, toolsPanel.isOpen() ? "HIDE TOOLS" : "TOOLS  F6",
                 width - 47, 20, TEXT);
