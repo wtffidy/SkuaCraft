@@ -168,7 +168,9 @@ function Install-Gradle88 {
     Write-Host "[SKUA] Downloading the official Gradle $GradleVersion distribution..."
 
     Invoke-WebRequest -Uri $DistributionUrl -OutFile $ArchivePath -UseBasicParsing
-    $ExpectedHash = (Invoke-RestMethod -Uri "$DistributionUrl.sha256").ToString().Trim().Split()[0].ToLowerInvariant()
+    # Official Gradle 8.8 binary distribution checksum:
+    # https://gradle.org/release-checksums/
+    $ExpectedHash = "a4b4158601f8636cdeeab09bd76afb640030bb5b144aafe261a5e8af027dc612"
     $ActualHash = (Get-FileHash -Path $ArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
 
     if ($ActualHash -ne $ExpectedHash) {
