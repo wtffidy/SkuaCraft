@@ -1,14 +1,13 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    "IRI",
-    "RQR",
-    "IRI"
+    "RRR",
+    "RFR",
+    "RRR"
   ],
   "key": {
-    "I": { "item": "minecraft:iron_ingot" },
     "R": { "item": "minecraft:redstone" },
-    "Q": { "item": "minecraft:quartz" }
+    "F": { "item": "minecraft:feather" }
   },
   "result": {
     "item": "skuacraft:skua_console",
