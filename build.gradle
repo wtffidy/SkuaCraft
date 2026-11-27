@@ -3,7 +3,7 @@ plugins {
 }
 
 group = 'io.github.wtffidy.skuacraft'
-version = '0.1.0-alpha.2'
+version = providers.gradleProperty('skuacraftVersion').getOrElse('0.1.0-alpha.2')
 
 base {
     archivesName = 'SkuaCraft'
