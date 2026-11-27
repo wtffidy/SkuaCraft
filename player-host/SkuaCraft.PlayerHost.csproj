@@ -22,8 +22,10 @@
   <ItemGroup>
     <EmbeddedResource Include="ScriptCatalogue.json" LogicalName="SkuaCraft.PlayerHost.ScriptCatalogue.json" />
   </ItemGroup>
+  <!-- MVS resolves these files from AppContext.BaseDirectory. Bundle and self-extract them
+       so they exist beside the extracted PlayerHost runtime instead of only beside the EXE. -->
   <ItemGroup>
-    <Content Include="..\vendor\MVS\src\Skua.App.Avalonia\AdvancedSkills.json" Link="AdvancedSkills.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
-    <Content Include="..\vendor\MVS\src\Skua.App.Avalonia\QuestData.json" Link="QuestData.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" ExcludeFromSingleFile="true" />
+    <Content Include="..\vendor\MVS\src\Skua.App.Avalonia\AdvancedSkills.json" Link="AdvancedSkills.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="..\vendor\MVS\src\Skua.App.Avalonia\QuestData.json" Link="QuestData.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
