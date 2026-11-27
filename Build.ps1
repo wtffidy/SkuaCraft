@@ -592,29 +592,7 @@ if (-not $SkipPrompts) {
             Write-Host "Close the Minecraft instance using this PlayerHost folder, then press Enter to retry. Type N to cancel."
             $RetryInstall = Read-Host "Retry installation"
 
-            if ($RetryInstall -match '^[Nn](o)?
-
-        try {
-            Copy-Item -Path (Join-Path $PlayerHostPublishDirectory "*") -Destination $HostDestination -Recurse -Force -ErrorAction Stop
-        }
-        catch {
-            throw "Could not install PlayerHost to '$HostDestination'. Make sure Minecraft and SkuaCraft.PlayerHost are closed, then rerun Build.ps1. Details: $($_.Exception.Message)"
-        }
-
-        if (-not (Test-Path -LiteralPath $InstalledHostExecutable -PathType Leaf)) {
-            throw "PlayerHost installation did not produce the expected executable in: $HostDestination"
-        }
-
-        Write-Host "[SUCCESS] PlayerHost installed: $HostDestination" -ForegroundColor Green
-        Save-LastUsedDirectory -SettingName "last-instance-path" -Path $InstancePath
-    }
-}
-
-Write-Host ""
-Write-Host "[SUCCESS] SkuaCraft and PlayerHost build completed." -ForegroundColor Green
-Write-Host "Mod JAR output: $DistributionDirectory"
-Write-Host "PlayerHost output: $PlayerHostPublishDirectory"
-) {
+            if ($RetryInstall -match '^(?i)n(o)?$') {
                 throw "PlayerHost installation cancelled because this instance's PlayerHost is still running."
             }
         }
