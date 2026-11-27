@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.DependencyInjection;
+using CommunityToolkit.Mvvm.Messaging;
 using Microsoft.Extensions.DependencyInjection;
 using Skua.Core.AppStartup;
 using Skua.Core.GameProxy;
@@ -58,6 +59,7 @@ public static class Program
             plugins.Initialize();
 
             IScriptInterface bot = serviceProvider.GetRequiredService<IScriptInterface>();
+            IScriptInterfaceManager botManager = serviceProvider.GetRequiredService<IScriptInterfaceManager>();
             RuffleFlashUtil flash = serviceProvider.GetRequiredService<RuffleFlashUtil>();
             RuffleHost playerHost = serviceProvider.GetRequiredService<RuffleHost>();
 
@@ -65,7 +67,7 @@ public static class Program
             // the Skua SWF after its page and ExternalInterface bridge are ready.
             bot.Flash.FlashCall += HandleFlashCall;
 
-            bot.Initialize();
+            botManager.Initialize();
             flash.InitializeFlash();
 
             WriteSessionFile(sessionFile, playerHost.PageUrl);
@@ -130,6 +132,9 @@ public static class Program
     private static void RegisterScriptableObjects(IServiceCollection services)
     {
         services.AddSingleton<IScriptInterface, ScriptInterface>();
+        services.AddSingleton<IScriptInterfaceManager>(provider =>
+            provider.GetRequiredService<IScriptInterface>() as IScriptInterfaceManager
+            ?? throw new InvalidOperationException("The Skua ScriptInterface does not implement IScriptInterfaceManager."));
         services.AddSingleton<IScriptManager, ScriptManager>();
         services.AddSingleton<IScriptStatus, ScriptManager>();
         services.AddSingleton<IScriptInventoryHelper, ScriptInventoryHelper>();
