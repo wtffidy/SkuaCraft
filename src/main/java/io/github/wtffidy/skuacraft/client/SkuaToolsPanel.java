@@ -324,21 +324,7 @@ public final class SkuaToolsPanel {
         post(endpoint, body);
     }
 
-    private void post(String endpoint, JsonObject body) {
-        message = "Sending command...";
-        PlayerControlClient.post(endpoint, body, result -> {
-            if (result != null && result.isJsonObject()) {
-                JsonObject response = result.getAsJsonObject();
-                message = getString(response, "message",
-                        isSuccessful(response) ? "Command accepted." : "Skua command failed.");
-                if (isSuccessful(response)) {
-                    refresh();
-                }
-            } else {
-                message = "Skua returned an empty command response.";
-            }
-        });
-    }
+
 
     public boolean mouseScrolled(double mouseX, double mouseY, double delta, int screenWidth, int screenHeight) {
         if (!isPointerOver(mouseX, mouseY, screenWidth, screenHeight)) {
