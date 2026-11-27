@@ -60,7 +60,6 @@ jobs:
 
           New-Item -ItemType Directory -Path ./release -Force | Out-Null
           Copy-Item $modJars[0].FullName "./release/SkuaCraft-$tagVersion.jar" -Force
-          Copy-Item ./player-host/Install-PlayerHost.ps1 ./player-host/publish/win-x64/Install-PlayerHost.ps1 -Force
           Compress-Archive -Path ./player-host/publish/win-x64/* -DestinationPath "./release/SkuaCraft-PlayerHost-win-x64-$tagVersion.zip" -CompressionLevel Optimal -Force
 
           if (-not (Test-Path "./release/SkuaCraft-PlayerHost-win-x64-$tagVersion.zip")) {
