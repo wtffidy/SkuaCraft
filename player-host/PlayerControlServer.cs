@@ -159,7 +159,7 @@ public sealed class PlayerControlServer : IAsyncDisposable
         if (request.Method.Equals("GET", StringComparison.OrdinalIgnoreCase)
             && request.Path.Equals("/api/scripts", StringComparison.OrdinalIgnoreCase))
         {
-            List<ScriptInfo> entries = ScriptInfo.Snapshot(scripts.Scripts);
+            List<ScriptInfo> entries = await scripts.GetScriptsAsync(null, cancellationToken).ConfigureAwait(false);
             return (200, new
             {
                 success = true,
@@ -215,7 +215,7 @@ public sealed class PlayerControlServer : IAsyncDisposable
 
                 if (info is null)
                 {
-                    return (404, new { success = false, message = "That script is not in the configured Scripts-for-bullshit catalogue." });
+                    return (404, new { success = false, message = "That script is not in the current auqw/Scripts upstream catalogue." });
                 }
 
                 Stopwatch commandTimer = Stopwatch.StartNew();
