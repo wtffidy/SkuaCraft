@@ -181,64 +181,71 @@ public static class Program
         try {
             const game = player.ruffle();
 
-            // Main.as loads AQW's live SWF as a child of the Skua wrapper.
-            // DisplayObject.width/height report the occupied bounds, including
-            // the current transform. loaderInfo dimensions are only a fallback.
-            let gameWidth = readGameNumber(game, "width");
-            let gameHeight = readGameNumber(game, "height");
-            const currentScaleX = readGameNumber(game, "scaleX") || 1;
-            const currentScaleY = readGameNumber(game, "scaleY") || 1;
-
-            if (gameWidth <= 0 || gameHeight <= 0) {
-                gameWidth = readGameNumber(game, "loaderInfo.width");
-                gameHeight = readGameNumber(game, "loaderInfo.height");
-            }
+            // pixelBounds is the visible root's bounding rectangle in stage
+            // coordinates. Unlike loaderInfo.width/height, it includes offsets
+            // inside the movie, which is important for AQW's loaded game SWF.
+            const bounds = {
+                x: readGameNumber(game, "transform.pixelBounds.x"),
+                y: readGameNumber(game, "transform.pixelBounds.y"),
+                width: readGameNumber(game, "transform.pixelBounds.width"),
+                height: readGameNumber(game, "transform.pixelBounds.height")
+            };
 
             const stageWidth = readGameNumber(game, "stage.stageWidth") || 958;
             const stageHeight = readGameNumber(game, "stage.stageHeight") || 550;
+            const currentScaleX = readGameNumber(game, "scaleX") || 1;
+            const currentScaleY = readGameNumber(game, "scaleY") || 1;
+            const currentX = readGameNumber(game, "x");
+            const currentY = readGameNumber(game, "y");
 
-            if (gameWidth <= 0 || gameHeight <= 0 || stageWidth <= 0 || stageHeight <= 0) {
-                const signature = [gameWidth, gameHeight, stageWidth, stageHeight].join("x");
+            if (bounds.width <= 0 || bounds.height <= 0 || stageWidth <= 0 || stageHeight <= 0) {
+                const signature = [bounds.x, bounds.y, bounds.width, bounds.height, stageWidth, stageHeight].join("|");
                 if (signature !== lastGameFit) {
                     lastGameFit = signature;
-                    log("AQW fit waiting for valid bounds: game " + gameWidth + "x" + gameHeight
+                    log("AQW fit waiting for stage bounds: " + JSON.stringify(bounds)
                         + ", stage " + stageWidth + "x" + stageHeight);
                 }
                 return;
             }
 
-            // Convert the currently transformed bounds back to their unscaled
-            // size, then calculate one uniform scale that fits the whole root.
-            const baseWidth = gameWidth / Math.abs(currentScaleX);
-            const baseHeight = gameHeight / Math.abs(currentScaleY);
-            const fitScale = Math.min(stageWidth / baseWidth, stageHeight / baseHeight);
-
+            // Fit the complete visible bounds into the parent stage without
+            // distorting the aspect ratio, then translate the bounds to center.
+            const fitScale = Math.min(stageWidth / bounds.width, stageHeight / bounds.height);
             if (!Number.isFinite(fitScale) || fitScale <= 0) return;
 
-            const targetScaleX = (currentScaleX < 0 ? -1 : 1) * fitScale;
-            const targetScaleY = (currentScaleY < 0 ? -1 : 1) * fitScale;
-            const fittedWidth = baseWidth * fitScale;
-            const fittedHeight = baseHeight * fitScale;
-            const offsetX = (stageWidth - fittedWidth) / 2;
-            const offsetY = (stageHeight - fittedHeight) / 2;
-            const currentX = readGameNumber(game, "x");
-            const currentY = readGameNumber(game, "y");
+            const targetScaleX = currentScaleX * fitScale;
+            const targetScaleY = currentScaleY * fitScale;
+            const fittedWidth = bounds.width * fitScale;
+            const fittedHeight = bounds.height * fitScale;
+            const targetLeft = (stageWidth - fittedWidth) / 2;
+            const targetTop = (stageHeight - fittedHeight) / 2;
+
+            // pixelBounds is stage-relative while x/y are the root registration
+            // point. Preserve the bounds-to-registration offset when moving it.
+            const targetX = targetLeft - fitScale * (bounds.x - currentX);
+            const targetY = targetTop - fitScale * (bounds.y - currentY);
 
             if (Math.abs(currentScaleX - targetScaleX) > 0.002)
                 game.callExternalInterface("setGameObject", "scaleX", targetScaleX);
             if (Math.abs(currentScaleY - targetScaleY) > 0.002)
                 game.callExternalInterface("setGameObject", "scaleY", targetScaleY);
-            if (Math.abs(currentX - offsetX) > 0.5)
-                game.callExternalInterface("setGameObject", "x", offsetX);
-            if (Math.abs(currentY - offsetY) > 0.5)
-                game.callExternalInterface("setGameObject", "y", offsetY);
+            if (Math.abs(currentX - targetX) > 0.5)
+                game.callExternalInterface("setGameObject", "x", targetX);
+            if (Math.abs(currentY - targetY) > 0.5)
+                game.callExternalInterface("setGameObject", "y", targetY);
 
-            const signature = [baseWidth, baseHeight, stageWidth, stageHeight, fitScale].map(v => v.toFixed(2)).join("|");
+            const signature = [
+                bounds.x, bounds.y, bounds.width, bounds.height,
+                stageWidth, stageHeight, fitScale, targetX, targetY
+            ].map(value => value.toFixed(2)).join("|");
+
             if (signature !== lastGameFit) {
                 lastGameFit = signature;
-                log("AQW root fit: bounds " + baseWidth.toFixed(1) + "x" + baseHeight.toFixed(1)
+                log("AQW root fit: bounds " + bounds.x.toFixed(1) + "," + bounds.y.toFixed(1)
+                    + " " + bounds.width.toFixed(1) + "x" + bounds.height.toFixed(1)
                     + ", stage " + stageWidth + "x" + stageHeight
                     + ", scale " + fitScale.toFixed(4)
+                    + ", position " + targetX.toFixed(1) + "," + targetY.toFixed(1)
                     + ", result " + fittedWidth.toFixed(1) + "x" + fittedHeight.toFixed(1));
             }
         } catch (error) {
@@ -252,7 +259,7 @@ public static class Program
         gameFitTimer = setInterval(fitLoadedGameToStage, 500);
     }
 
-""";
+"""
 
         bridge = bridge.Replace(fitFunctionMarker, fitFunction + fitFunctionMarker, StringComparison.Ordinal);
         bridge = bridge.Replace(
