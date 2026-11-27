@@ -90,7 +90,10 @@ public static class Program
             IPluginManager plugins = serviceProvider.GetRequiredService<IPluginManager>();
             plugins.Initialize();
 
-            IScriptInterface bot = serviceProvider.GetRequiredService<IScriptInterface>();
+            IScriptInterface bot = GetRequiredServiceWithFileLockRetry<IScriptInterface>(
+                serviceProvider,
+                "Skua script interface"
+            );
             IScriptInterfaceManager botManager = serviceProvider.GetRequiredService<IScriptInterfaceManager>();
             IScriptManager scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
             IGetScriptsService scriptCatalogue = serviceProvider.GetRequiredService<IGetScriptsService>();
@@ -358,6 +361,45 @@ public static class Program
 
         WriteStartupDiagnostic(startupLogFile, "[RufflePatch] Patch completed successfully.");
         Console.WriteLine("[Ruffle] Using SHOW_ALL with AQW's native 958x550 layout.");
+    }
+
+    private static T GetRequiredServiceWithFileLockRetry<T>(IServiceProvider serviceProvider, string serviceName)
+        where T : notnull
+    {
+        const int maxAttempts = 8;
+        IOException? lastException = null;
+
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                return serviceProvider.GetRequiredService<T>();
+            }
+            catch (IOException exception) when (IsFileSharingViolation(exception))
+            {
+                lastException = exception;
+                if (attempt == maxAttempts)
+                {
+                    break;
+                }
+
+                Console.WriteLine(
+                    $"[Startup] {serviceName} hit a temporary file lock. Retrying ({attempt}/{maxAttempts - 1})."
+                );
+                Thread.Sleep(500);
+            }
+        }
+
+        throw new IOException(
+            $"Could not initialize {serviceName} because a Skua profile file remained locked after {maxAttempts} attempts.",
+            lastException
+        );
+    }
+
+    private static bool IsFileSharingViolation(IOException exception)
+    {
+        int nativeError = exception.HResult & 0xFFFF;
+        return nativeError is 32 or 33;
     }
 
     private static void WriteStartupDiagnostic(string path, string message)
