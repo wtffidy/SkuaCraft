@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: skuacraft-build-${{ github.ref }}
@@ -63,3 +63,82 @@ jobs:
       - name: Build guided Windows installer
         shell: pwsh
         run: ./installer/Build-Installer.ps1
+
+      - name: Prepare rolling main prerelease assets
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $gradleText = Get-Content ./build.gradle -Raw
+          $versionMatch = [regex]::Match($gradleText, "(?m)^version\s*=\s*'([^']+)'")
+          if (-not $versionMatch.Success) {
+            throw "Could not read the project version from build.gradle."
+          }
+
+          $version = $versionMatch.Groups[1].Value
+          $releaseDirectory = Join-Path $PWD "release"
+          $playerHostDirectory = Join-Path $PWD "player-host/publish/win-x64"
+          $installer = Join-Path $releaseDirectory "SkuaCraft-Setup-$version.exe"
+          $modJar = Join-Path $releaseDirectory "SkuaCraft-$version.jar"
+          $rinkuJar = Join-Path $releaseDirectory "Rinku-3.0.4.jar"
+
+          foreach ($requiredFile in @($installer, $modJar, $rinkuJar, (Join-Path $playerHostDirectory "SkuaCraft.PlayerHost.exe"))) {
+            if (-not (Test-Path -LiteralPath $requiredFile -PathType Leaf)) {
+              throw "A required main-build release file is missing: $requiredFile"
+            }
+          }
+
+          Copy-Item -LiteralPath $installer -Destination (Join-Path $releaseDirectory "SkuaCraft-Setup.exe") -Force
+          Copy-Item -LiteralPath $modJar -Destination (Join-Path $releaseDirectory "SkuaCraft.jar") -Force
+          Copy-Item ./player-host/Install-PlayerHost.ps1 -Destination (Join-Path $playerHostDirectory "Install-PlayerHost.ps1") -Force
+          Compress-Archive -Path (Join-Path $playerHostDirectory "*") -DestinationPath (Join-Path $releaseDirectory "SkuaCraft-PlayerHost-win-x64.zip") -CompressionLevel Optimal -Force
+
+          $assets = @(
+            (Join-Path $releaseDirectory "SkuaCraft-Setup.exe"),
+            (Join-Path $releaseDirectory "SkuaCraft.jar"),
+            $rinkuJar,
+            (Join-Path $releaseDirectory "SkuaCraft-PlayerHost-win-x64.zip")
+          )
+          foreach ($asset in $assets) {
+            if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) {
+              throw "Main prerelease asset was not created: $asset"
+            }
+          }
+
+          "MAIN_BUILD_VERSION=$version" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Publish rolling main prerelease
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $tag = "main-latest"
+          $releaseDirectory = Join-Path $PWD "release"
+          $assets = @(
+            (Join-Path $releaseDirectory "SkuaCraft-Setup.exe"),
+            (Join-Path $releaseDirectory "SkuaCraft.jar"),
+            (Join-Path $releaseDirectory "Rinku-3.0.4.jar"),
+            (Join-Path $releaseDirectory "SkuaCraft-PlayerHost-win-x64.zip")
+          )
+
+          & gh release view $tag --json tagName *> $null
+          $releaseExists = $LASTEXITCODE -eq 0
+          if ($releaseExists) {
+            & gh release upload $tag @assets --clobber
+            if ($LASTEXITCODE -ne 0) {
+              throw "Uploading main prerelease assets failed with exit code $LASTEXITCODE."
+            }
+
+            & gh api --method PATCH "repos/$env:GITHUB_REPOSITORY/git/refs/tags/$tag" -f "sha=$env:GITHUB_SHA" -F "force=true"
+            if ($LASTEXITCODE -ne 0) {
+              throw "Updating the main-latest tag failed with exit code $LASTEXITCODE."
+            }
+          }
+          else {
+            & gh release create $tag @assets --title "SkuaCraft main build" --notes "Rolling prerelease from the latest successful push to main. Build version: $env:MAIN_BUILD_VERSION. Source commit: $env:GITHUB_SHA." --prerelease --target $env:GITHUB_SHA
+            if ($LASTEXITCODE -ne 0) {
+              throw "Creating the main prerelease failed with exit code $LASTEXITCODE."
+            }
+          }
