@@ -48,18 +48,16 @@ The MVS v1.0.6 source is pinned as a Git submodule at vendor/MVS. The desktop Vi
 
 ## 📦 Installation
 
-Versioned GitHub Releases contain both installable pieces: the Minecraft mod JAR and the self-contained Windows PlayerHost ZIP. Pushing a matching `v*` version tag builds, smoke-tests and publishes a release automatically. Pull requests and ordinary branch builds only run validation; they do not publish downloads.
+GitHub Releases provide a guided Windows installer as the recommended download, plus the individual files for manual installations. A matching `v*` tag builds, smoke-tests and publishes the release. Pull requests and ordinary branch builds validate the installer but do not publish downloads.
 
-1. Download `SkuaCraft-<version>.jar` and `SkuaCraft-PlayerHost-win-x64-<version>.zip` from the [SkuaCraft Releases page](https://github.com/wtffidy/SkuaCraft/releases).
-2. Install the mod JAR and its required Rinku 3.0.4 library in the Project Infinity instance.
-3. Extract the PlayerHost ZIP anywhere, run `Install-PlayerHost.ps1`, and paste the Minecraft instance folder path when prompted. It installs the host into `config/skuacraft/player-host/`. You can also pass `-InstancePath "C:\path\to\instance"` to skip the prompt.
+1. Download `SkuaCraft-Setup-<version>.exe` from the [SkuaCraft Releases page](https://github.com/wtffidy/SkuaCraft/releases).
+2. Run the installer and browse to your Minecraft Forge instance folder. Select the instance root, the folder containing `mods` and `config`, not the `mods` folder itself.
+   - **CurseForge:** open the modpack profile menu and choose **Open Folder**.
+   - **Official Minecraft Launcher:** open **Installations**, find your Forge profile, choose **Edit > More Options**, then open the **Game Directory**.
+3. Click Install. The installer places SkuaCraft and its required Rinku 3.0.4 dependency in `mods/`, and PlayerHost in `config/skuacraft/player-host/`.
 4. Launch Minecraft, equip the Skua Console and right-click it.
 
-The PlayerHost ZIP includes the installer, executable and runtime files. Rinku 3.0.4 remains a separate required Minecraft mod/library and is not bundled into the SkuaCraft JAR.
-
-On first launch, Rinku may download its matching Chromium/JCEF runtime. The player host then starts locally, writes a short-lived session file and serves the Ruffle page through a tokenized loopback URL.
-
-The default player-host path can be changed in config/skuacraft-client.toml.
+The installer does not overwrite SkuaCraft's existing configuration or saved login data. It is designed for Windows x64 and Forge 1.20.1. Advanced users can still download the standalone JAR, Rinku dependency and PlayerHost ZIP from the same release.
 
 ## 🛠️ Build from source
 
