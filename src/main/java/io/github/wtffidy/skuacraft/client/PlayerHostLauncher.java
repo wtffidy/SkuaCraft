@@ -77,7 +77,8 @@ public final class PlayerHostLauncher {
                     command.add(hostDll.toString());
                 } else {
                     dispatch(callback, LaunchResult.failed(
-                            "Skua player host is missing. Publish player-host for win-x64 and install it at "
+                            "Skua PlayerHost is not installed. Run player-host\\Install-PlayerHost.ps1, "
+                                    + "select this Minecraft instance, then reopen the console. Expected location: "
                                     + hostDirectory
                     ));
                     return;
