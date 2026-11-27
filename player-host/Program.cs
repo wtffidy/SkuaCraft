@@ -13,6 +13,9 @@ using Skua.Core.Scripts.Helpers;
 using Skua.Core.Services;
 using Skua.Core.Skills;
 using Skua.Flash.Ruffle;
+using System.Collections.Concurrent;
+using System.Reflection;
+using System.Text;
 using System.Text.Json;
 
 namespace SkuaCraft.PlayerHost;
@@ -65,6 +68,8 @@ public static class Program
             RuffleFlashUtil flash = serviceProvider.GetRequiredService<RuffleFlashUtil>();
             RuffleHost playerHost = serviceProvider.GetRequiredService<RuffleHost>();
 
+            ApplyRuffleScalingPatch(playerHost);
+
             // Mirrors MVS's SkuaStartupHandler.LoadGame behaviour. Ruffle requests
             // the Skua SWF after its page and ExternalInterface bridge are ready.
             bot.Flash.FlashCall += HandleFlashCall;
@@ -102,6 +107,48 @@ public static class Program
         {
             TryDeleteFile(sessionFile);
         }
+    }
+
+    private static void ApplyRuffleScalingPatch(RuffleHost playerHost)
+    {
+        FieldInfo? cacheField = typeof(RuffleHost).GetField("_resourceCache", BindingFlags.Instance | BindingFlags.NonPublic);
+        if (cacheField?.GetValue(playerHost) is not ConcurrentDictionary<string, byte[]> resourceCache)
+        {
+            throw new InvalidOperationException("Could not access the embedded Ruffle resource cache to apply responsive SWF scaling.");
+        }
+
+        Assembly ruffleAssembly = typeof(RuffleHost).Assembly;
+        string? bridgeResourceName = ruffleAssembly.GetManifestResourceNames()
+            .FirstOrDefault(name => string.Equals(name.Replace('\\', '/'), "web/bridge.js", StringComparison.Ordinal));
+
+        if (bridgeResourceName is null)
+        {
+            throw new InvalidOperationException("The embedded Ruffle bridge.js resource was not found.");
+        }
+
+        using Stream? bridgeStream = ruffleAssembly.GetManifestResourceStream(bridgeResourceName);
+        if (bridgeStream is null)
+        {
+            throw new InvalidOperationException("The embedded Ruffle bridge.js resource could not be opened.");
+        }
+
+        using StreamReader reader = new(bridgeStream);
+        string bridge = reader.ReadToEnd();
+        const string scaleOption = "            scale: \"showAll\",";
+        if (!bridge.Contains(scaleOption, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The Ruffle scaling configuration changed; the responsive scaling patch was not applied.");
+        }
+
+        const string scalePatch = scaleOption
+            + "\n            forceScale: true,"
+            + "\n            salign: \"\","
+            + "\n            forceAlign: true,";
+
+        bridge = bridge.Replace(scaleOption, scalePatch, StringComparison.Ordinal);
+        resourceCache["web/bridge.js"] = Encoding.UTF8.GetBytes(bridge);
+
+        Console.WriteLine("[Ruffle] Locked SWF scaling to showAll with centered stage alignment.");
     }
 
     private static void ConfigureServices(IServiceCollection services)
