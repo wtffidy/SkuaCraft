@@ -12,43 +12,18 @@ namespace SkuaCraft.PlayerHost;
 
 public sealed class PlayerScriptsService : ObservableObject, IGetScriptsService
 {
-    private const string RawRoot = "https://raw.githubusercontent.com/wtffidy/Scripts-for-bullshit/refs/heads/Skua/";
+    private const string CatalogueUrl = "https://raw.githubusercontent.com/auqw/Scripts/refs/heads/Skua/scripts.json";
+    private const string RawRoot = "https://raw.githubusercontent.com/auqw/Scripts/refs/heads/Skua/";
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(90) };
     private readonly ConcurrentDictionary<string, SemaphoreSlim> downloads = new(StringComparer.OrdinalIgnoreCase);
+    private readonly SemaphoreSlim catalogueGate = new(1, 1);
+    private bool remoteCatalogueLoaded;
 
     public RangedObservableCollection<ScriptInfo> Scripts { get; } = new();
 
     public PlayerScriptsService()
     {
-        using Stream stream = typeof(PlayerScriptsService).Assembly
-            .GetManifestResourceStream("SkuaCraft.PlayerHost.ScriptCatalogue.json")
-            ?? throw new FileNotFoundException("The bundled Scripts-for-bullshit catalogue is missing.");
-
-        using StreamReader reader = new(stream);
-        string json = reader.ReadToEnd();
-        List<ScriptInfo> entries = Newtonsoft.Json.JsonConvert.DeserializeObject<List<ScriptInfo>>(json)
-            ?? throw new InvalidDataException("The bundled script catalogue could not be parsed.");
-
-        foreach (ScriptInfo info in entries)
-        {
-            if (info is null || !IsSafeRelativePath(info.FilePath))
-            {
-                continue;
-            }
-
-            info.DownloadUrl = BuildDownloadUrl(info.FilePath);
-            if (string.Equals(info.Description, "null", StringComparison.OrdinalIgnoreCase))
-            {
-                info.Description = string.Empty;
-            }
-
-            info.Tags = (info.Tags ?? Array.Empty<string>())
-                .Where(tag => !string.IsNullOrWhiteSpace(tag) && !string.Equals(tag, "null", StringComparison.OrdinalIgnoreCase))
-                .ToArray();
-
-            info.CachedDownloaded = File.Exists(info.LocalFile);
-            Scripts.Add(info);
-        }
+        LoadCachedCatalogue();
     }
 
     public int Downloaded => Scripts.Count(info => info.Downloaded);
@@ -56,38 +31,70 @@ public sealed class PlayerScriptsService : ObservableObject, IGetScriptsService
     public int Total => Scripts.Count;
     public int Missing => Total - Downloaded;
 
-    public ValueTask<List<ScriptInfo>> GetScriptsAsync(IProgress<string>? progress, CancellationToken token)
+    public async ValueTask<List<ScriptInfo>> GetScriptsAsync(IProgress<string>? progress, CancellationToken token)
     {
+        try
+        {
+            await RefreshCatalogueAsync(progress, token, false).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException && Scripts.Count > 0)
+        {
+            progress?.Report($"Couldn't refresh the auqw/Scripts catalogue. Using the last cached list: {ex.Message}");
+        }
+
         token.ThrowIfCancellationRequested();
-        progress?.Report($"Loaded {Scripts.Count:N0} scripts from wtffidy/Scripts-for-bullshit (Skua).");
-        return ValueTask.FromResult(ScriptInfo.Snapshot(Scripts));
+        progress?.Report($"Loaded {Scripts.Count:N0} scripts from auqw/Scripts (Skua).");
+        return ScriptInfo.Snapshot(Scripts);
     }
 
-    public Task RefreshScriptsAsync(IProgress<string>? progress, CancellationToken token)
+    public async Task RefreshScriptsAsync(IProgress<string>? progress, CancellationToken token)
     {
-        token.ThrowIfCancellationRequested();
-        progress?.Report("Using the pinned wtffidy/Scripts-for-bullshit (Skua) catalogue.");
-        return Task.CompletedTask;
+        await RefreshCatalogueAsync(progress, token, true).ConfigureAwait(false);
     }
 
-    public Task<bool> RefreshListCacheAsync(CancellationToken token)
+    public async Task<bool> RefreshListCacheAsync(CancellationToken token)
     {
-        token.ThrowIfCancellationRequested();
-        return Task.FromResult(Scripts.Count > 0);
+        try
+        {
+            await RefreshCatalogueAsync(null, token, true).ConfigureAwait(false);
+            return Scripts.Count > 0;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     public Task UpdateScriptDatesAsync(IProgress<string>? progress, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        progress?.Report("Script dates are supplied by the pinned catalogue.");
+        progress?.Report("Script metadata is supplied by the live auqw/Scripts catalogue.");
         return Task.CompletedTask;
     }
 
-    public Task<int> IncrementalUpdateScriptsAsync(IProgress<string>? progress, CancellationToken token)
+    public async Task<int> IncrementalUpdateScriptsAsync(IProgress<string>? progress, CancellationToken token)
     {
-        token.ThrowIfCancellationRequested();
-        progress?.Report("The bundled Scripts-for-bullshit catalogue is read-only. Update SkuaCraft to refresh its snapshot.");
-        return Task.FromResult(0);
+        await RefreshScriptsAsync(progress, token).ConfigureAwait(false);
+        List<ScriptInfo> outdated = Scripts.Where(info => info.Downloaded && info.Outdated).ToList();
+        if (outdated.Count == 0)
+        {
+            progress?.Report("Downloaded scripts are already up to date.");
+            return 0;
+        }
+
+        HashSet<string> outdatedPaths = outdated
+            .Select(info => info.FilePath.Replace('\\', '/'))
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        return await DownloadAllWhereAsync(
+            info => outdatedPaths.Contains(info.FilePath.Replace('\\', '/')),
+            progress,
+            token
+        ).ConfigureAwait(false);
     }
 
     public Task<long> CheckAdvanceSkillSetsUpdates() => Task.FromResult(0L);
@@ -173,18 +180,37 @@ public sealed class PlayerScriptsService : ObservableObject, IGetScriptsService
     public async Task<int> DownloadAllWhereAsync(
         Func<ScriptInfo, bool> predicate,
         IProgress<string>? progress = null,
-        CancellationToken token = default)
+        CancellationToken token = default
+    )
     {
         ArgumentNullException.ThrowIfNull(predicate);
         List<ScriptInfo> selected = Scripts.Where(predicate).ToList();
         int completed = 0;
+        int failed = 0;
 
         foreach (ScriptInfo info in selected)
         {
             token.ThrowIfCancellationRequested();
-            await DownloadScriptAsync(info, token).ConfigureAwait(false);
-            completed++;
-            progress?.Report($"Downloaded {completed}/{selected.Count}: {info.Name}");
+            try
+            {
+                await DownloadScriptAsync(info, token).ConfigureAwait(false);
+                completed++;
+                progress?.Report($"Downloaded {completed}/{selected.Count}: {info.Name}");
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                failed++;
+                progress?.Report($"Failed to download {info.Name}: {ex.Message}");
+            }
+        }
+
+        if (failed > 0)
+        {
+            progress?.Report($"Downloaded {completed} scripts; {failed} failed.");
         }
 
         return completed;
@@ -215,6 +241,143 @@ public sealed class PlayerScriptsService : ObservableObject, IGetScriptsService
     public Task<bool> UpdateQuestDataFile() => Task.FromResult(false);
     public Task<long> CheckJunkItemsUpdates() => Task.FromResult(0L);
     public Task<bool> UpdateJunkItemsFile() => Task.FromResult(false);
+
+    private async Task RefreshCatalogueAsync(IProgress<string>? progress, CancellationToken token, bool force)
+    {
+        await catalogueGate.WaitAsync(token).ConfigureAwait(false);
+        try
+        {
+            if (!force && remoteCatalogueLoaded)
+            {
+                return;
+            }
+
+            progress?.Report("Checking auqw/Scripts for the latest Skua script catalogue...");
+            using HttpResponseMessage response = await Http.GetAsync(
+                CatalogueUrl,
+                HttpCompletionOption.ResponseHeadersRead,
+                token
+            ).ConfigureAwait(false);
+            response.EnsureSuccessStatusCode();
+
+            string json = await response.Content.ReadAsStringAsync(token).ConfigureAwait(false);
+            List<ScriptInfo> entries = Newtonsoft.Json.JsonConvert.DeserializeObject<List<ScriptInfo>>(json)
+                ?? throw new InvalidDataException("The auqw/Scripts catalogue could not be parsed.");
+
+            List<ScriptInfo> validEntries = NormalizeEntries(entries);
+            if (validEntries.Count == 0)
+            {
+                throw new InvalidDataException("The auqw/Scripts catalogue did not contain any valid script entries.");
+            }
+
+            SaveCatalogueCache(json);
+            Scripts.ReplaceRange(validEntries);
+            remoteCatalogueLoaded = true;
+            progress?.Report($"Loaded {validEntries.Count:N0} scripts from auqw/Scripts (Skua).");
+        }
+        finally
+        {
+            catalogueGate.Release();
+        }
+    }
+
+    private void LoadCachedCatalogue()
+    {
+        try
+        {
+            string cacheFile = ClientFileSources.SkuaScriptsCacheFile;
+            if (!File.Exists(cacheFile))
+            {
+                return;
+            }
+
+            string json = File.ReadAllText(cacheFile);
+            List<ScriptInfo>? entries = Newtonsoft.Json.JsonConvert.DeserializeObject<List<ScriptInfo>>(json);
+            if (entries is null || entries.Count == 0)
+            {
+                return;
+            }
+
+            List<ScriptInfo> validEntries = NormalizeEntries(entries);
+            if (validEntries.Count > 0)
+            {
+                Scripts.ReplaceRange(validEntries);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Newtonsoft.Json.JsonException)
+        {
+            System.Diagnostics.Trace.WriteLine($"[Scripts] Cached catalogue could not be loaded: {ex.Message}");
+        }
+    }
+
+    private static List<ScriptInfo> NormalizeEntries(IEnumerable<ScriptInfo?> entries)
+    {
+        List<ScriptInfo> normalized = new();
+        HashSet<string> seenPaths = new(StringComparer.OrdinalIgnoreCase);
+
+        foreach (ScriptInfo? info in entries)
+        {
+            if (info is null || !IsSafeRelativePath(info.FilePath))
+            {
+                continue;
+            }
+
+            string normalizedPath = info.FilePath.Replace('\\', '/');
+            if (!seenPaths.Add(normalizedPath))
+            {
+                continue;
+            }
+
+            info.DownloadUrl = BuildDownloadUrl(info.FilePath);
+            if (string.Equals(info.Description, "null", StringComparison.OrdinalIgnoreCase))
+            {
+                info.Description = string.Empty;
+            }
+
+            info.Tags = (info.Tags ?? Array.Empty<string>())
+                .Where(tag => !string.IsNullOrWhiteSpace(tag) && !string.Equals(tag, "null", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
+
+            info.CachedDownloaded = File.Exists(info.LocalFile);
+            if (!info.CachedDownloaded.GetValueOrDefault())
+            {
+                info.CachedLocalSize = 0;
+            }
+
+            normalized.Add(info);
+        }
+
+        return normalized;
+    }
+
+    private static void SaveCatalogueCache(string json)
+    {
+        try
+        {
+            string cacheFile = ClientFileSources.SkuaScriptsCacheFile;
+            string? directory = Path.GetDirectoryName(cacheFile);
+            if (string.IsNullOrWhiteSpace(directory))
+            {
+                return;
+            }
+
+            Directory.CreateDirectory(directory);
+            string temporaryFile = cacheFile + $".{Guid.NewGuid():N}.tmp";
+            try
+            {
+                File.WriteAllText(temporaryFile, json);
+                File.Move(temporaryFile, cacheFile, true);
+            }
+            finally
+            {
+                TryDeleteFile(temporaryFile);
+            }
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            System.Diagnostics.Trace.WriteLine($"[Scripts] Could not save the upstream catalogue cache: {ex.Message}");
+        }
+    }
 
     private static string BuildDownloadUrl(string filePath)
     {
