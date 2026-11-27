@@ -30,12 +30,17 @@ public static class Program
         string stopFile = GetArgument(args, "--stop-file")
             ?? Path.Combine(AppContext.BaseDirectory, "player-stop.request");
         string? sessionDirectory = Path.GetDirectoryName(sessionFile);
-        string startupLogFile = Path.Combine(
+        string startupLogDirectory = Path.Combine(
             string.IsNullOrWhiteSpace(sessionDirectory) ? AppContext.BaseDirectory : sessionDirectory,
-            "player-host-startup.log"
+            "logs"
         );
+        string startupLogFile = Path.Combine(startupLogDirectory, "player-host-startup.log");
 
         WriteStartupDiagnostic(startupLogFile, $"[Startup] Main entered. PID={Environment.ProcessId}, BaseDirectory={AppContext.BaseDirectory}");
+        AppDomain.CurrentDomain.UnhandledException += (_, eventArgs) =>
+            WriteStartupDiagnostic(startupLogFile, $"[Startup] UNHANDLED EXCEPTION: {eventArgs.ExceptionObject}");
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+            WriteStartupDiagnostic(startupLogFile, "[Startup] ProcessExit event fired.");
 
         using CancellationTokenSource shutdown = new();
         Console.CancelKeyPress += (_, eventArgs) =>
