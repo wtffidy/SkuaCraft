@@ -14,6 +14,7 @@ using Skua.Core.Services;
 using Skua.Core.Skills;
 using Skua.Flash.Ruffle;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Reflection;
 using System.Text;
 using System.Text.Json;
@@ -38,6 +39,17 @@ public static class Program
 
         try
         {
+            try
+            {
+                using Process currentProcess = Process.GetCurrentProcess();
+                currentProcess.PriorityClass = ProcessPriorityClass.BelowNormal;
+                Console.WriteLine("[Runtime] PlayerHost process priority set to BelowNormal.");
+            }
+            catch (Exception exception) when (exception is InvalidOperationException or System.ComponentModel.Win32Exception or PlatformNotSupportedException)
+            {
+                Console.WriteLine($"[Runtime] Could not lower PlayerHost process priority: {exception.Message}");
+            }
+
             ServiceCollection services = new();
             ConfigureServices(services);
 
@@ -50,6 +62,7 @@ public static class Program
             );
 
             Ioc.Default.ConfigureServices(serviceProvider);
+            using PlayerScriptDiagnostics scriptDiagnostics = new();
             Console.WriteLine($"[Runtime] PlayerHost is limited to {Environment.ProcessorCount} logical processors.");
 
             IClientFilesService clientFiles = serviceProvider.GetRequiredService<IClientFilesService>();
