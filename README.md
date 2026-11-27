@@ -48,7 +48,7 @@ The MVS v1.0.6 source is pinned as a Git submodule at vendor/MVS. The desktop Vi
 
 ## 📦 Installation
 
-Every successful push to `main` now updates a rolling [latest main prerelease](https://github.com/wtffidy/SkuaCraft/releases/tag/main-latest). It contains the guided Windows installer and individual downloads with stable filenames, so the download links do not change between builds. Versioned releases are published separately from `v*` tags on the [Releases page](https://github.com/wtffidy/SkuaCraft/releases).
+Every successful push to `main` now updates a rolling [latest main prerelease](https://github.com/wtffidy/SkuaCraft/releases/tag/main-latest). It contains the guided Windows installer and individual downloads with stable filenames, so the download links do not change between builds. Versioned releases are published separately from `v*` tags on the [Releases page](https://github.com/wtffidy/SkuaCraft/releases). To create one manually, open **Actions → Release SkuaCraft → Run workflow**. You can enter an exact version, choose the next build number, promote alpha to beta, or publish the `1.0.0` stable release.
 
 1. Download [SkuaCraft-Setup.exe](https://github.com/wtffidy/SkuaCraft/releases/download/main-latest/SkuaCraft-Setup.exe) from the latest main prerelease.
 2. Run the installer and browse to your Minecraft Forge instance folder. Select the instance root, the folder containing `mods` and `config`, not the `mods` folder itself.
