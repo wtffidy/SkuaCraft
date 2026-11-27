@@ -37,6 +37,7 @@ public final class SkuaToolsPanel {
     private boolean searchSelected;
     private int searchCaret;
     private int pageIndex;
+    private double wheelAccumulator;
 
     public boolean isOpen() {
         return open;
@@ -388,10 +389,11 @@ public final class SkuaToolsPanel {
         List<JsonObject> filtered = getFilteredScripts();
         int pageCount = Math.max(1, (filtered.size() + layout.pageSize - 1) / layout.pageSize);
 
-        if (delta > 0) {
-            pageIndex = Math.max(0, pageIndex - 1);
-        } else if (delta < 0) {
-            pageIndex = Math.min(pageCount - 1, pageIndex + 1);
+        wheelAccumulator += delta;
+        int pageDelta = (int) wheelAccumulator;
+        if (pageDelta != 0) {
+            pageIndex = Math.max(0, Math.min(pageCount - 1, pageIndex - pageDelta));
+            wheelAccumulator -= pageDelta;
         }
 
         return true;
