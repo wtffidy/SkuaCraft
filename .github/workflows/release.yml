@@ -69,8 +69,8 @@ jobs:
             }
           }
           else {
-            $ManualVersion = $env:RELEASE_VERSION_INPUT.Trim()
-            $BuildNumberText = $env:BUILD_NUMBER_INPUT.Trim()
+            $ManualVersion = ([string]$env:RELEASE_VERSION_INPUT).Trim()
+            $BuildNumberText = ([string]$env:BUILD_NUMBER_INPUT).Trim()
             $Channel = $env:RELEASE_CHANNEL
             if ([string]::IsNullOrWhiteSpace($Channel)) {
               $Channel = "next-build"
