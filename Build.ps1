@@ -571,10 +571,12 @@ if (-not $SkipPrompts) {
         # The executable cannot be replaced while this instance is using it.
         $InstalledHostExecutable = Join-Path $HostDestination "SkuaCraft.PlayerHost.exe"
         while ($true) {
-            $RunningHost = @(Get-Process -Name "SkuaCraft.PlayerHost" -ErrorAction SilentlyContinue |
+            # Match the exact executable path for this instance. Other Minecraft
+            # instances can keep their own PlayerHost processes running.
+            $RunningHost = @(Get-CimInstance -ClassName Win32_Process -Filter "Name = 'SkuaCraft.PlayerHost.exe'" -ErrorAction SilentlyContinue |
                 Where-Object {
                     try {
-                        $_.Path -and [IO.Path]::GetFullPath($_.Path) -ieq [IO.Path]::GetFullPath($InstalledHostExecutable)
+                        $_.ExecutablePath -and [IO.Path]::GetFullPath($_.ExecutablePath) -ieq [IO.Path]::GetFullPath($InstalledHostExecutable)
                     }
                     catch {
                         $false
@@ -586,12 +588,34 @@ if (-not $SkipPrompts) {
             }
 
             Write-Host ""
-            Write-Host "[WAIT] SkuaCraft.PlayerHost is still running for this Minecraft instance." -ForegroundColor Yellow
-            Write-Host "Close Minecraft completely, then press Enter to retry. Type N to cancel."
+            Write-Host "[WAIT] This instance's SkuaCraft.PlayerHost is still running." -ForegroundColor Yellow
+            Write-Host "Close the Minecraft instance using this PlayerHost folder, then press Enter to retry. Type N to cancel."
             $RetryInstall = Read-Host "Retry installation"
 
-            if ($RetryInstall -match '^[Nn](o)?$') {
-                throw "PlayerHost installation cancelled because the existing PlayerHost is still running."
+            if ($RetryInstall -match '^[Nn](o)?
+
+        try {
+            Copy-Item -Path (Join-Path $PlayerHostPublishDirectory "*") -Destination $HostDestination -Recurse -Force -ErrorAction Stop
+        }
+        catch {
+            throw "Could not install PlayerHost to '$HostDestination'. Make sure Minecraft and SkuaCraft.PlayerHost are closed, then rerun Build.ps1. Details: $($_.Exception.Message)"
+        }
+
+        if (-not (Test-Path -LiteralPath $InstalledHostExecutable -PathType Leaf)) {
+            throw "PlayerHost installation did not produce the expected executable in: $HostDestination"
+        }
+
+        Write-Host "[SUCCESS] PlayerHost installed: $HostDestination" -ForegroundColor Green
+        Save-LastUsedDirectory -SettingName "last-instance-path" -Path $InstancePath
+    }
+}
+
+Write-Host ""
+Write-Host "[SUCCESS] SkuaCraft and PlayerHost build completed." -ForegroundColor Green
+Write-Host "Mod JAR output: $DistributionDirectory"
+Write-Host "PlayerHost output: $PlayerHostPublishDirectory"
+) {
+                throw "PlayerHost installation cancelled because this instance's PlayerHost is still running."
             }
         }
 
