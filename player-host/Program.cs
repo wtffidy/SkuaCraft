@@ -154,49 +154,94 @@ public static class Program
         }
 
         const string fitFunction = """
+    let lastGameFit = "";
+    let gameFitTimer = 0;
+
+    function readGameNumber(game, path) {
+        try {
+            const raw = game.callExternalInterface("getGameObject", path);
+            const value = Number(JSON.parse(raw));
+            return Number.isFinite(value) ? value : 0;
+        } catch (error) {
+            return 0;
+        }
+    }
+
     function fitLoadedGameToStage() {
         if (!player || !player.ruffle) return;
 
         try {
             const game = player.ruffle();
-            const readNumber = path => {
-                const raw = game.callExternalInterface("getGameObject", path);
-                const value = Number(JSON.parse(raw));
-                return Number.isFinite(value) ? value : 0;
-            };
 
-            // Main.as hosts the live AQW SWF as a child of the 958x550 Skua stage.
-            // Fit that child to the wrapper's stage, not merely to the Chromium canvas.
-            let gameWidth = readNumber("loaderInfo.width");
-            let gameHeight = readNumber("loaderInfo.height");
+            // Main.as loads AQW's live SWF as a child of the Skua wrapper.
+            // DisplayObject.width/height report the occupied bounds, including
+            // the current transform. loaderInfo dimensions are only a fallback.
+            let gameWidth = readGameNumber(game, "width");
+            let gameHeight = readGameNumber(game, "height");
+            const currentScaleX = readGameNumber(game, "scaleX") || 1;
+            const currentScaleY = readGameNumber(game, "scaleY") || 1;
+
             if (gameWidth <= 0 || gameHeight <= 0) {
-                gameWidth = readNumber("width");
-                gameHeight = readNumber("height");
+                gameWidth = readGameNumber(game, "loaderInfo.width");
+                gameHeight = readGameNumber(game, "loaderInfo.height");
             }
 
-            if (gameWidth <= 0 || gameHeight <= 0) {
-                log("AQW stage fit skipped: invalid game dimensions " + gameWidth + "x" + gameHeight);
+            const stageWidth = readGameNumber(game, "stage.stageWidth") || 958;
+            const stageHeight = readGameNumber(game, "stage.stageHeight") || 550;
+
+            if (gameWidth <= 0 || gameHeight <= 0 || stageWidth <= 0 || stageHeight <= 0) {
+                const signature = [gameWidth, gameHeight, stageWidth, stageHeight].join("x");
+                if (signature !== lastGameFit) {
+                    lastGameFit = signature;
+                    log("AQW fit waiting for valid bounds: game " + gameWidth + "x" + gameHeight
+                        + ", stage " + stageWidth + "x" + stageHeight);
+                }
                 return;
             }
 
-            const stageWidth = 958;
-            const stageHeight = 550;
-            const fitScale = Math.min(stageWidth / gameWidth, stageHeight / gameHeight);
-            const fittedWidth = gameWidth * fitScale;
-            const fittedHeight = gameHeight * fitScale;
+            // Convert the currently transformed bounds back to their unscaled
+            // size, then calculate one uniform scale that fits the whole root.
+            const baseWidth = gameWidth / Math.abs(currentScaleX);
+            const baseHeight = gameHeight / Math.abs(currentScaleY);
+            const fitScale = Math.min(stageWidth / baseWidth, stageHeight / baseHeight);
+
+            if (!Number.isFinite(fitScale) || fitScale <= 0) return;
+
+            const targetScaleX = (currentScaleX < 0 ? -1 : 1) * fitScale;
+            const targetScaleY = (currentScaleY < 0 ? -1 : 1) * fitScale;
+            const fittedWidth = baseWidth * fitScale;
+            const fittedHeight = baseHeight * fitScale;
             const offsetX = (stageWidth - fittedWidth) / 2;
             const offsetY = (stageHeight - fittedHeight) / 2;
+            const currentX = readGameNumber(game, "x");
+            const currentY = readGameNumber(game, "y");
 
-            game.callExternalInterface("setGameObject", "scaleX", fitScale);
-            game.callExternalInterface("setGameObject", "scaleY", fitScale);
-            game.callExternalInterface("setGameObject", "x", offsetX);
-            game.callExternalInterface("setGameObject", "y", offsetY);
+            if (Math.abs(currentScaleX - targetScaleX) > 0.002)
+                game.callExternalInterface("setGameObject", "scaleX", targetScaleX);
+            if (Math.abs(currentScaleY - targetScaleY) > 0.002)
+                game.callExternalInterface("setGameObject", "scaleY", targetScaleY);
+            if (Math.abs(currentX - offsetX) > 0.5)
+                game.callExternalInterface("setGameObject", "x", offsetX);
+            if (Math.abs(currentY - offsetY) > 0.5)
+                game.callExternalInterface("setGameObject", "y", offsetY);
 
-            log("AQW game SWF fitted to Skua stage: " + gameWidth + "x" + gameHeight
-                + " -> " + fittedWidth.toFixed(1) + "x" + fittedHeight.toFixed(1));
+            const signature = [baseWidth, baseHeight, stageWidth, stageHeight, fitScale].map(v => v.toFixed(2)).join("|");
+            if (signature !== lastGameFit) {
+                lastGameFit = signature;
+                log("AQW root fit: bounds " + baseWidth.toFixed(1) + "x" + baseHeight.toFixed(1)
+                    + ", stage " + stageWidth + "x" + stageHeight
+                    + ", scale " + fitScale.toFixed(4)
+                    + ", result " + fittedWidth.toFixed(1) + "x" + fittedHeight.toFixed(1));
+            }
         } catch (error) {
-            log("AQW stage fit failed: " + error);
+            log("AQW root fit failed: " + error);
         }
+    }
+
+    function startGameFitMonitor() {
+        if (gameFitTimer) clearInterval(gameFitTimer);
+        fitLoadedGameToStage();
+        gameFitTimer = setInterval(fitLoadedGameToStage, 500);
     }
 
 """;
@@ -204,7 +249,7 @@ public static class Program
         bridge = bridge.Replace(fitFunctionMarker, fitFunction + fitFunctionMarker, StringComparison.Ordinal);
         bridge = bridge.Replace(
             loadedHandler,
-            loadedHandler[..^1] + " setTimeout(fitLoadedGameToStage, 0); }",
+            loadedHandler[..^1] + " setTimeout(startGameFitMonitor, 0); }",
             StringComparison.Ordinal
         );
 
@@ -216,7 +261,7 @@ public static class Program
         bridge = bridge.Replace(scaleOption, scalePatch, StringComparison.Ordinal);
         resourceCache["web/bridge.js"] = Encoding.UTF8.GetBytes(bridge);
 
-        Console.WriteLine("[Ruffle] Locked SWF scaling and enabled automatic AQW game-stage fitting.");
+        Console.WriteLine("[Ruffle] Locked stage scaling and enabled continuous AQW root-bound fitting.");
     }
 
     private static void ConfigureServices(IServiceCollection services)
