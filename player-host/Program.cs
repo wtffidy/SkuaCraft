@@ -71,8 +71,8 @@ public static class Program
             ApplyRuffleScalingPatch(playerHost);
             playerHost.Control.PageLog += message =>
             {
-                if (message.StartsWith("AQW root fit", StringComparison.Ordinal)
-                    || message.StartsWith("AQW fit waiting", StringComparison.Ordinal))
+                if (message.StartsWith("AQW stage:", StringComparison.Ordinal)
+                    || message.StartsWith("AQW stage diagnostic failed", StringComparison.Ordinal))
                 {
                     Console.WriteLine($"[AQW scaling] {message}");
                 }
@@ -161,110 +161,35 @@ public static class Program
             throw new InvalidOperationException("The Skua ExternalInterface bridge changed; the AQW stage-fit patch was not applied.");
         }
 
-        const string fitFunction = """
-    let lastGameFit = "";
-    let gameFitTimer = 0;
-
-    function readGameNumber(game, path) {
-        try {
-            const raw = game.callExternalInterface("getGameObject", path);
-            const value = Number(JSON.parse(raw));
-            return Number.isFinite(value) ? value : 0;
-        } catch (error) {
-            return 0;
-        }
-    }
-
-    function fitLoadedGameToStage() {
+        const string stageDiagnostic = """
+    function logGameStage() {
         if (!player || !player.ruffle) return;
 
         try {
             const game = player.ruffle();
-
-            // pixelBounds is the visible root's bounding rectangle in stage
-            // coordinates. Unlike loaderInfo.width/height, it includes offsets
-            // inside the movie, which is important for AQW's loaded game SWF.
-            const bounds = {
-                x: readGameNumber(game, "transform.pixelBounds.x"),
-                y: readGameNumber(game, "transform.pixelBounds.y"),
-                width: readGameNumber(game, "transform.pixelBounds.width"),
-                height: readGameNumber(game, "transform.pixelBounds.height")
+            const read = path => {
+                try {
+                    return JSON.parse(game.callExternalInterface("getGameObject", path));
+                } catch (error) {
+                    return "n/a";
+                }
             };
 
-            const stageWidth = readGameNumber(game, "stage.stageWidth") || 958;
-            const stageHeight = readGameNumber(game, "stage.stageHeight") || 550;
-            const currentScaleX = readGameNumber(game, "scaleX") || 1;
-            const currentScaleY = readGameNumber(game, "scaleY") || 1;
-            const currentX = readGameNumber(game, "x");
-            const currentY = readGameNumber(game, "y");
-
-            if (bounds.width <= 0 || bounds.height <= 0 || stageWidth <= 0 || stageHeight <= 0) {
-                const signature = [bounds.x, bounds.y, bounds.width, bounds.height, stageWidth, stageHeight].join("|");
-                if (signature !== lastGameFit) {
-                    lastGameFit = signature;
-                    log("AQW fit waiting for stage bounds: " + JSON.stringify(bounds)
-                        + ", stage " + stageWidth + "x" + stageHeight);
-                }
-                return;
-            }
-
-            // Fit the complete visible bounds into the parent stage without
-            // distorting the aspect ratio, then translate the bounds to center.
-            const fitScale = Math.min(stageWidth / bounds.width, stageHeight / bounds.height);
-            if (!Number.isFinite(fitScale) || fitScale <= 0) return;
-
-            const targetScaleX = currentScaleX * fitScale;
-            const targetScaleY = currentScaleY * fitScale;
-            const fittedWidth = bounds.width * fitScale;
-            const fittedHeight = bounds.height * fitScale;
-            const targetLeft = (stageWidth - fittedWidth) / 2;
-            const targetTop = (stageHeight - fittedHeight) / 2;
-
-            // pixelBounds is stage-relative while x/y are the root registration
-            // point. Preserve the bounds-to-registration offset when moving it.
-            const targetX = targetLeft - fitScale * (bounds.x - currentX);
-            const targetY = targetTop - fitScale * (bounds.y - currentY);
-
-            if (Math.abs(currentScaleX - targetScaleX) > 0.002)
-                game.callExternalInterface("setGameObject", "scaleX", targetScaleX);
-            if (Math.abs(currentScaleY - targetScaleY) > 0.002)
-                game.callExternalInterface("setGameObject", "scaleY", targetScaleY);
-            if (Math.abs(currentX - targetX) > 0.5)
-                game.callExternalInterface("setGameObject", "x", targetX);
-            if (Math.abs(currentY - targetY) > 0.5)
-                game.callExternalInterface("setGameObject", "y", targetY);
-
-            const signature = [
-                bounds.x, bounds.y, bounds.width, bounds.height,
-                stageWidth, stageHeight, fitScale, targetX, targetY
-            ].map(value => value.toFixed(2)).join("|");
-
-            if (signature !== lastGameFit) {
-                lastGameFit = signature;
-                log("AQW root fit: bounds " + bounds.x.toFixed(1) + "," + bounds.y.toFixed(1)
-                    + " " + bounds.width.toFixed(1) + "x" + bounds.height.toFixed(1)
-                    + ", stage " + stageWidth + "x" + stageHeight
-                    + ", scale " + fitScale.toFixed(4)
-                    + ", position " + targetX.toFixed(1) + "," + targetY.toFixed(1)
-                    + ", result " + fittedWidth.toFixed(1) + "x" + fittedHeight.toFixed(1));
-            }
+            log("AQW stage: " + read("stage.stageWidth") + "x" + read("stage.stageHeight")
+                + ", root " + read("width") + "x" + read("height")
+                + ", scale " + read("scaleX") + "," + read("scaleY")
+                + ", position " + read("x") + "," + read("y")
+                + ", mode " + read("stage.scaleMode"));
         } catch (error) {
-            log("AQW root fit failed: " + error);
+            log("AQW stage diagnostic failed: " + error);
         }
     }
 
-    function startGameFitMonitor() {
-        if (gameFitTimer) clearInterval(gameFitTimer);
-        fitLoadedGameToStage();
-        gameFitTimer = setInterval(fitLoadedGameToStage, 500);
-    }
-
 """;
-
-        bridge = bridge.Replace(fitFunctionMarker, fitFunction + fitFunctionMarker, StringComparison.Ordinal);
+        bridge = bridge.Replace(fitFunctionMarker, stageDiagnostic + fitFunctionMarker, StringComparison.Ordinal);
         bridge = bridge.Replace(
             loadedHandler,
-            loadedHandler[..^1] + " setTimeout(startGameFitMonitor, 0); }",
+            loadedHandler[..^1] + " setTimeout(logGameStage, 0); }",
             StringComparison.Ordinal
         );
 
@@ -276,7 +201,7 @@ public static class Program
         bridge = bridge.Replace(scaleOption, scalePatch, StringComparison.Ordinal);
         resourceCache["web/bridge.js"] = Encoding.UTF8.GetBytes(bridge);
 
-        Console.WriteLine("[Ruffle] Locked stage scaling and enabled continuous AQW root-bound fitting.");
+        Console.WriteLine("[Ruffle] Using native SHOW_ALL stage scaling and enabled AQW stage diagnostics.");
     }
 
     private static void ConfigureServices(IServiceCollection services)
