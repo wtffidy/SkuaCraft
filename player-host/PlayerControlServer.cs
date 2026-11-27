@@ -1,4 +1,5 @@
 using Skua.Core.Interfaces;
+using Skua.Core.Models.GitHub;
 using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
