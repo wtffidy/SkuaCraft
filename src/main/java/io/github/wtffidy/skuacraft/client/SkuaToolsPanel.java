@@ -35,6 +35,7 @@ public final class SkuaToolsPanel {
     private boolean scriptsLoading;
     private boolean searchFocused;
     private boolean searchSelected;
+    private boolean commandPending;
     private int searchCaret;
     private int scrollOffset;
     private double wheelAccumulator;
@@ -110,13 +111,24 @@ public final class SkuaToolsPanel {
     }
 
     private void post(String endpoint, JsonObject body) {
+        if (commandPending) {
+            message = "A script command is already being processed.";
+            return;
+        }
+
+        commandPending = true;
         message = endpoint.endsWith("/start")
                 ? "Downloading, verifying and compiling script..."
                 : endpoint.endsWith("/load")
                     ? "Downloading and loading script..."
-                    : "Sending command to Skua Core...";
+                    : endpoint.endsWith("/stop")
+                        ? "Stopping the active script..."
+                        : endpoint.endsWith("/pause")
+                            ? "Updating script pause state..."
+                            : "Sending command to Skua Core...";
 
         PlayerControlClient.post(endpoint, body, result -> {
+            commandPending = false;
             if (result != null && result.isJsonObject()) {
                 JsonObject response = result.getAsJsonObject();
                 boolean successful = isSuccessful(response);
