@@ -60,6 +60,8 @@ public static class Program
 
             IScriptInterface bot = serviceProvider.GetRequiredService<IScriptInterface>();
             IScriptInterfaceManager botManager = serviceProvider.GetRequiredService<IScriptInterfaceManager>();
+            IScriptManager scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
+            IGetScriptsService scriptCatalogue = serviceProvider.GetRequiredService<IGetScriptsService>();
             RuffleFlashUtil flash = serviceProvider.GetRequiredService<RuffleFlashUtil>();
             RuffleHost playerHost = serviceProvider.GetRequiredService<RuffleHost>();
 
@@ -70,7 +72,10 @@ public static class Program
             botManager.Initialize();
             flash.InitializeFlash();
 
-            WriteSessionFile(sessionFile, playerHost.PageUrl);
+            await using PlayerControlServer controlServer = new(bot, scriptManager, scriptCatalogue);
+            controlServer.Start();
+
+            WriteSessionFile(sessionFile, playerHost.PageUrl, controlServer.BaseUrl, controlServer.Token);
             Console.WriteLine($"SKUA_PLAYER_READY {playerHost.PageUrl}");
 
             await WaitForStopAsync(stopFile, shutdown.Token).ConfigureAwait(false);
@@ -202,7 +207,7 @@ public static class Program
         return null;
     }
 
-    private static void WriteSessionFile(string path, string pageUrl)
+    private static void WriteSessionFile(string path, string pageUrl, string controlUrl, string controlToken)
     {
         string? directory = Path.GetDirectoryName(path);
         if (!string.IsNullOrWhiteSpace(directory))
@@ -214,6 +219,8 @@ public static class Program
         string json = JsonSerializer.Serialize(new
         {
             pageUrl,
+            controlUrl,
+            controlToken,
             processId = Environment.ProcessId,
             version = typeof(Program).Assembly.GetName().Version?.ToString() ?? "0.1.0"
         });
