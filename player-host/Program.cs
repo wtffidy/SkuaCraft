@@ -38,7 +38,7 @@ public static class Program
             ServiceCollection services = new();
             ConfigureServices(services);
 
-            using ServiceProvider serviceProvider = services.BuildServiceProvider(
+            await using ServiceProvider serviceProvider = services.BuildServiceProvider(
                 new ServiceProviderOptions
                 {
                     ValidateOnBuild = true,
