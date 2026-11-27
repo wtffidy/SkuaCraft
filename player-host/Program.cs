@@ -196,19 +196,21 @@ public static class Program
             if (Math.abs(currentScaleY - 1) > 0.001)
                 game.callExternalInterface("setGameObject", "scaleY", 1);
 
+            const actualRootWidth = readAqwNumber(game, "width");
+            const actualRootHeight = readAqwNumber(game, "height");
             const loginWidth = readAqwNumber(game, "mcLogin.width");
             const loginHeight = readAqwNumber(game, "mcLogin.height");
             const loginX = readAqwNumber(game, "mcLogin.x");
             const loginY = readAqwNumber(game, "mcLogin.y");
             const actualScaleX = readAqwNumber(game, "scaleX");
             const actualScaleY = readAqwNumber(game, "scaleY");
-            const signature = [stageWidth, stageHeight, rootWidth, rootHeight, loginWidth, loginHeight, loginX, loginY, actualScaleX, actualScaleY]
+            const signature = [stageWidth, stageHeight, actualRootWidth, actualRootHeight, loginWidth, loginHeight, loginX, loginY, actualScaleX, actualScaleY]
                 .map(value => value.toFixed(2)).join("|");
 
             if (signature !== lastAqwViewport) {
                 lastAqwViewport = signature;
                 log("AQW native layout: stage " + stageWidth + "x" + stageHeight
-                    + ", root bounds " + rootWidth.toFixed(1) + "x" + rootHeight.toFixed(1)
+                    + ", root bounds " + actualRootWidth.toFixed(1) + "x" + actualRootHeight.toFixed(1)
                     + ", scale " + actualScaleX.toFixed(5) + "," + actualScaleY.toFixed(5)
                     + ", login " + loginWidth.toFixed(1) + "x" + loginHeight.toFixed(1)
                     + " at " + loginX.toFixed(1) + "," + loginY.toFixed(1));
