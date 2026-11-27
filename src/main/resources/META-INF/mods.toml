@@ -4,7 +4,7 @@ license="All Rights Reserved"
 
 [[mods]]
 modId="skuacraft"
-version="\${mod_version}"
+version="${mod_version}"
 displayName="SkuaCraft"
 displayURL="https://github.com/wtffidy/SkuaCraft"
 authors="wtffidy"
