@@ -3,6 +3,8 @@ param()
 
 $ErrorActionPreference = "Stop"
 $GradleVersion = "8.8"
+$JdkVersion = "17.0.21.1+2"
+$JdkDistributionName = "jdk-$JdkVersion"
 $DistributionName = "gradle-$GradleVersion"
 $ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 
@@ -133,6 +135,76 @@ function Get-Java17Home {
     return $null
 }
 
+function Install-Java17 {
+    $ToolsDirectory = Join-Path $env:LOCALAPPDATA "SkuaCraft\tools"
+    $InstallDirectory = Join-Path $ToolsDirectory $JdkDistributionName
+    $JavaExe = Join-Path $InstallDirectory "bin\java.exe"
+    $JavacExe = Join-Path $InstallDirectory "bin\javac.exe"
+
+    if ((Test-Path $JavaExe) -and (Test-Path $JavacExe)) {
+        return $InstallDirectory
+    }
+
+    New-Item -ItemType Directory -Path $ToolsDirectory -Force | Out-Null
+
+    $ArchiveName = "OpenJDK17U-jdk_x64_windows_hotspot_17.0.21.1_2.zip"
+    $ArchivePath = Join-Path $ToolsDirectory $ArchiveName
+    $StagingDirectory = Join-Path $ToolsDirectory "$JdkDistributionName-extract"
+    $DistributionUrl = "https://github.com/adoptium/temurin17-binaries/releases/download/jdk-17.0.21.1%2B2/$ArchiveName"
+
+    Write-Host "[SKUA] JDK 17 was not found. Downloading Eclipse Temurin JDK $JdkVersion..." -ForegroundColor Yellow
+    Write-Host "[SKUA] This is a one-time download and will not replace your existing Java installation."
+
+    Invoke-WebRequest -Uri $DistributionUrl -OutFile $ArchivePath -UseBasicParsing
+
+    # SHA-256 digest published for this exact asset by the official Adoptium release.
+    $ExpectedHash = "eafba0944f777abdc74d5aad16049c9b5a1275b6ce99e2939ba9f7f3e6f08c87"
+    $ActualHash = (Get-FileHash -Path $ArchivePath -Algorithm SHA256).Hash.ToLowerInvariant()
+
+    if ($ActualHash -ne $ExpectedHash) {
+        Remove-Item $ArchivePath -Force -ErrorAction SilentlyContinue
+        throw "Temurin JDK $JdkVersion download failed SHA-256 verification."
+    }
+
+    if (Test-Path $StagingDirectory) {
+        Remove-Item $StagingDirectory -Recurse -Force
+    }
+
+    New-Item -ItemType Directory -Path $StagingDirectory -Force | Out-Null
+
+    try {
+        Expand-Archive -Path $ArchivePath -DestinationPath $StagingDirectory -Force
+
+        $ExtractedHome = Get-ChildItem $StagingDirectory -Directory |
+            Where-Object {
+                (Test-Path (Join-Path $_.FullName "bin\java.exe")) -and
+                (Test-Path (Join-Path $_.FullName "bin\javac.exe"))
+            } |
+            Select-Object -First 1
+
+        if (-not $ExtractedHome) {
+            throw "The Temurin archive was verified but did not contain a usable Windows JDK."
+        }
+
+        if (Test-Path $InstallDirectory) {
+            Remove-Item $InstallDirectory -Recurse -Force
+        }
+
+        Move-Item -LiteralPath $ExtractedHome.FullName -Destination $InstallDirectory
+    }
+    finally {
+        Remove-Item $StagingDirectory -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item $ArchivePath -Force -ErrorAction SilentlyContinue
+    }
+
+    if (-not (Test-Path $JavaExe) -or -not (Test-Path $JavacExe)) {
+        throw "Temurin JDK $JdkVersion was extracted, but java.exe or javac.exe is missing."
+    }
+
+    Write-Host "[OK] Downloaded and verified JDK 17." -ForegroundColor Green
+    return $InstallDirectory
+}
+
 function Get-Gradle88 {
     $Candidates = [System.Collections.Generic.List[string]]::new()
 
@@ -227,13 +299,33 @@ Write-Host ""
 
 $JavaHome = Get-Java17Home
 if (-not $JavaHome) {
-    throw "A JDK 17 installation could not be located. Checked JAVA_HOME, JDK_HOME, PATH, Java registry entries, and common Adoptium/Microsoft/Corretto/Zulu install folders. Install a JDK 17 (not just a JRE), then rerun Build.bat."
+    $JavaHome = Install-Java17
 }
 
 $env:JAVA_HOME = $JavaHome
 $env:PATH = (Join-Path $JavaHome "bin") + [IO.Path]::PathSeparator + $env:PATH
 
-$JavaVersion = (& (Join-Path $JavaHome "bin\java.exe") -version 2>&1 | Select-Object -First 1).ToString()
+$JavaVersionStartInfo = [System.Diagnostics.ProcessStartInfo]::new()
+$JavaVersionStartInfo.FileName = Join-Path $JavaHome "bin\java.exe"
+$JavaVersionStartInfo.Arguments = "-version"
+$JavaVersionStartInfo.UseShellExecute = $false
+$JavaVersionStartInfo.CreateNoWindow = $true
+$JavaVersionStartInfo.RedirectStandardOutput = $true
+$JavaVersionStartInfo.RedirectStandardError = $true
+$JavaVersionProcess = [System.Diagnostics.Process]::new()
+$JavaVersionProcess.StartInfo = $JavaVersionStartInfo
+
+try {
+    [void]$JavaVersionProcess.Start()
+    $JavaVersionStdOut = $JavaVersionProcess.StandardOutput.ReadToEnd()
+    $JavaVersionStdErr = $JavaVersionProcess.StandardError.ReadToEnd()
+    $JavaVersionProcess.WaitForExit()
+    $JavaVersion = ($JavaVersionStdOut + $JavaVersionStdErr).Trim() -split "\r?\n" | Select-Object -First 1
+}
+finally {
+    $JavaVersionProcess.Dispose()
+}
+
 Write-Host "[OK] Java:   $JavaHome" -ForegroundColor Green
 Write-Host "     $JavaVersion"
 
