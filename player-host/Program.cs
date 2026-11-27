@@ -114,6 +114,7 @@ public static class Program
         services.AddSingleton<IScriptPathResolver, ScriptPathResolver>();
 
         services.AddSingleton<ISettingsService, PlayerSettingsService>();
+        services.AddSingleton<IScreenshotService, PlayerScreenshotService>();
         services.AddSingleton<IDialogService, PlayerDialogService>();
         services.AddSingleton<IDispatcherService, PlayerDispatcherService>();
 
@@ -191,7 +192,8 @@ public static class Program
         services.AddSingleton<IClientFilesService, ClientFilesService>();
         services.AddSingleton<IPluginHelper, PlayerPluginHelper>();
         services.AddSingleton<IPluginManager, PluginManager>();
-        services.AddTransient<IPluginContainer, PluginContainer>();
+        // PluginManager constructs PluginContainer with the discovered plugin instance.
+        // Registering the container itself makes DI validate a phantom ISkuaPlugin dependency.
     }
 
     private static string? GetArgument(string[] args, string name)
