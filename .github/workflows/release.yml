@@ -37,6 +37,10 @@ jobs:
         shell: pwsh
         run: ./player-host/SmokeTest.ps1
 
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
       - name: Package release assets
         shell: pwsh
         run: |
@@ -80,6 +84,10 @@ jobs:
             throw "Player host release archive was not created."
           }
 
+      - name: Build guided Windows installer
+        shell: pwsh
+        run: ./installer/Build-Installer.ps1
+
       - name: Publish GitHub Release
         shell: pwsh
         env:
@@ -88,14 +96,40 @@ jobs:
           $tag = $env:RELEASE_TAG
           $version = $env:RELEASE_VERSION
           $assets = @(
+            "./release/SkuaCraft-Setup-$version.exe",
             "./release/SkuaCraft-$version.jar",
+            "./release/Rinku-3.0.4.jar",
             "./release/SkuaCraft-PlayerHost-win-x64-$version.zip"
           )
-          $arguments = @("release", "create", $tag) + $assets + @("--title", "SkuaCraft $version", "--generate-notes", "--target", $env:GITHUB_SHA)
-          if ($version -match '(?i)(alpha|beta|rc|preview|pre)') {
-            $arguments += "--prerelease"
+
+          if (-not (Test-Path $assets[0])) {
+            throw "The guided Windows installer is missing."
           }
-          & gh @arguments
-          if ($LASTEXITCODE -ne 0) {
-            throw "GitHub Release creation failed with exit code $LASTEXITCODE."
+
+          & gh release view $tag --json tagName *> $null
+          $releaseExists = $LASTEXITCODE -eq 0
+          if ($releaseExists) {
+            & gh release upload $tag @assets --clobber
+            if ($LASTEXITCODE -ne 0) {
+              throw "Uploading release assets failed with exit code $LASTEXITCODE."
+            }
+
+            $editArguments = @("release", "edit", $tag, "--title", "SkuaCraft $version")
+            if ($version -match '(?i)(alpha|beta|rc|preview|pre)') {
+              $editArguments += "--prerelease"
+            }
+            & gh @editArguments
+            if ($LASTEXITCODE -ne 0) {
+              throw "Updating release metadata failed with exit code $LASTEXITCODE."
+            }
+          }
+          else {
+            $arguments = @("release", "create", $tag) + $assets + @("--title", "SkuaCraft $version", "--generate-notes", "--target", $env:GITHUB_SHA)
+            if ($version -match '(?i)(alpha|beta|rc|preview|pre)') {
+              $arguments += "--prerelease"
+            }
+            & gh @arguments
+            if ($LASTEXITCODE -ne 0) {
+              throw "GitHub Release creation failed with exit code $LASTEXITCODE."
+            }
           }
