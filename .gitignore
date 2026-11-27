@@ -7,3 +7,6 @@ out/
 *.iml
 *.log
 config/
+/player-host/bin
+/player-host/obj
+/player-host/publish
