@@ -41,6 +41,9 @@ Type: files; Name: "{code:GetModsDirectory}\rinku-*.jar"
 [Code]
 var
   InstancePage: TInputDirWizardPage;
+  ProfilePage: TInputOptionWizardPage;
+  ProfileDirectories: TStringList;
+  HasProfilePage: Boolean;
 
 function GetDriveType(lpRootPathName: string): LongWord; external 'GetDriveTypeW@kernel32.dll stdcall';
 function GetLogicalDrives: LongWord; external 'GetLogicalDrives@kernel32.dll stdcall';
@@ -77,26 +80,20 @@ begin
     (Name = '.nuget');
 end;
 
-// Finds a directory named "minecraft" with an "instances" child.
-// The depth limit keeps fallback discovery bounded on machines with large drives.
-function FindInstanceInsideInstancesDirectory(InstancesDirectory: string): string;
+// Adds each actual profile folder instead of selecting the Instances parent.
+procedure CollectInstanceProfiles(InstancesDirectory: string);
 var
   FindRec: TFindRec;
   CandidateDirectory: string;
-  SelectedDirectory: string;
-  ExistingSkuaCraftDirectory: string;
-  CandidateCount: Integer;
 begin
-  Result := '';
-  CandidateCount := 0;
-  SelectedDirectory := '';
-  ExistingSkuaCraftDirectory := '';
+  if not DirExists(InstancesDirectory) then
+    Exit;
 
-  // Also support a path that is already an individual Minecraft instance.
+  // Permit an already-selected instance directory as a discovery result.
   if DirExists(AddBackslash(InstancesDirectory) + 'mods') or
      DirExists(AddBackslash(InstancesDirectory) + 'config') then
   begin
-    Result := InstancesDirectory;
+    ProfileDirectories.Add(InstancesDirectory);
     Exit;
   end;
 
@@ -111,26 +108,16 @@ begin
         CandidateDirectory := AddBackslash(InstancesDirectory) + FindRec.Name;
         if DirExists(AddBackslash(CandidateDirectory) + 'mods') or
            DirExists(AddBackslash(CandidateDirectory) + 'config') then
-        begin
-          CandidateCount := CandidateCount + 1;
-          SelectedDirectory := CandidateDirectory;
-
-          // When several profiles exist, prefer the one already using SkuaCraft.
-          if DirExists(AddBackslash(CandidateDirectory) + 'config\skuacraft') then
-            ExistingSkuaCraftDirectory := CandidateDirectory;
-        end;
+          ProfileDirectories.Add(CandidateDirectory);
       end;
     until not FindNext(FindRec);
   finally
     FindClose(FindRec);
   end;
-
-  if ExistingSkuaCraftDirectory <> '' then
-    Result := ExistingSkuaCraftDirectory
-  else if CandidateCount = 1 then
-    Result := SelectedDirectory;
 end;
 
+// Searches for a directory named "minecraft" with an "instances" child.
+// The depth limit keeps fallback discovery bounded on machines with large drives.
 function FindMinecraftInstances(Directory: string; Depth: Integer): string;
 var
   FindRec: TFindRec;
@@ -147,9 +134,12 @@ begin
     CandidateDirectory := AddBackslash(Directory) + 'instances';
     if DirExists(CandidateDirectory) then
     begin
-      Result := FindInstanceInsideInstancesDirectory(CandidateDirectory);
-      if Result <> '' then
+      CollectInstanceProfiles(CandidateDirectory);
+      if ProfileDirectories.Count > 0 then
+      begin
+        Result := CandidateDirectory;
         Exit;
+      end;
     end;
   end;
 
@@ -176,7 +166,7 @@ begin
   end;
 end;
 
-function FindDefaultInstanceDirectory(): string;
+function FindDefaultInstancesDirectory(): string;
 var
   ProfileDirectory: string;
   CandidateDirectory: string;
@@ -191,30 +181,46 @@ begin
   CandidateDirectory := AddBackslash(ProfileDirectory) + 'curseforge\minecraft\Instances';
   if DirExists(CandidateDirectory) then
   begin
-    Result := FindInstanceInsideInstancesDirectory(CandidateDirectory);
-    Exit;
+    CollectInstanceProfiles(CandidateDirectory);
+    if ProfileDirectories.Count > 0 then
+    begin
+      Result := CandidateDirectory;
+      Exit;
+    end;
   end;
 
   // Check common alternate CurseForge locations before searching local drives.
   CandidateDirectory := AddBackslash(ExpandConstant('{userdocs}')) + 'CurseForge\Minecraft\Instances';
   if DirExists(CandidateDirectory) then
   begin
-    Result := FindInstanceInsideInstancesDirectory(CandidateDirectory);
-    Exit;
+    CollectInstanceProfiles(CandidateDirectory);
+    if ProfileDirectories.Count > 0 then
+    begin
+      Result := CandidateDirectory;
+      Exit;
+    end;
   end;
 
   CandidateDirectory := AddBackslash(ExpandConstant('{userappdata}')) + 'CurseForge\Minecraft\Instances';
   if DirExists(CandidateDirectory) then
   begin
-    Result := FindInstanceInsideInstancesDirectory(CandidateDirectory);
-    Exit;
+    CollectInstanceProfiles(CandidateDirectory);
+    if ProfileDirectories.Count > 0 then
+    begin
+      Result := CandidateDirectory;
+      Exit;
+    end;
   end;
 
   CandidateDirectory := AddBackslash(ExpandConstant('{localappdata}')) + 'CurseForge\Minecraft\Instances';
   if DirExists(CandidateDirectory) then
   begin
-    Result := FindInstanceInsideInstancesDirectory(CandidateDirectory);
-    Exit;
+    CollectInstanceProfiles(CandidateDirectory);
+    if ProfileDirectories.Count > 0 then
+    begin
+      Result := CandidateDirectory;
+      Exit;
+    end;
   end;
 
   // Search this user's profile first, then other fixed local drives.
@@ -240,28 +246,92 @@ end;
 
 procedure InitializeWizard();
 var
-  DefaultInstanceDirectory: string;
+  DefaultInstancesDirectory: string;
+  DefaultProfileIndex: Integer;
+  ProfileIndex: Integer;
+  AfterPageID: Integer;
 begin
+  ProfileDirectories := TStringList.Create;
+  DefaultProfileIndex := -1;
+  HasProfilePage := False;
+  DefaultInstancesDirectory := FindDefaultInstancesDirectory();
+
+  if ProfileDirectories.Count > 1 then
+  begin
+    ProfilePage := CreateInputOptionPage(
+      wpWelcome,
+      'Choose your Minecraft profile',
+      'Multiple Minecraft profiles were found',
+      'Select the Forge profile where SkuaCraft should be installed. The installer will put the mod in that profile''s mods folder and PlayerHost under its config folder.',
+      True,
+      False
+    );
+
+    for ProfileIndex := 0 to ProfileDirectories.Count - 1 do
+    begin
+      ProfilePage.Add(ProfileDirectories[ProfileIndex]);
+      if DirExists(AddBackslash(ProfileDirectories[ProfileIndex]) + 'config\skuacraft') then
+        DefaultProfileIndex := ProfileIndex;
+    end;
+
+    // Preselect the only profile that already has SkuaCraft installed, if there is one.
+    if DefaultProfileIndex >= 0 then
+      ProfilePage.Values[DefaultProfileIndex] := True;
+
+    HasProfilePage := True;
+    AfterPageID := ProfilePage.ID;
+  end
+  else
+    AfterPageID := wpWelcome;
+
   InstancePage := CreateInputDirPage(
-    wpWelcome,
+    AfterPageID,
     'Choose your Minecraft instance',
-    'Select the Forge instance folder',
-    'The installer looks for your CurseForge installation and preselects a Forge profile inside its Instances folder. If it finds multiple profiles, choose the correct profile folder. Otherwise, it searches for other Minecraft\Instances folders on your local drives. You can still browse to a different instance.' + #13#10 + #13#10 +
+    'Confirm the Forge instance folder',
+    'The installer automatically detects CurseForge profiles under curseforge\minecraft\Instances. If it cannot find them, it searches for other Minecraft\Instances folders on your local drives. You can still browse to a different instance.' + #13#10 + #13#10 +
     'CurseForge: open the modpack profile menu and choose Open Folder.' + #13#10 +
     'Official Launcher: Installations > your Forge profile > Edit > More Options > Game Directory.',
     False,
     ''
   );
   InstancePage.Add('Minecraft instance folder:');
-  DefaultInstanceDirectory := FindDefaultInstanceDirectory();
-  InstancePage.Values[0] := DefaultInstanceDirectory;
+
+  if ProfileDirectories.Count = 1 then
+    InstancePage.Values[0] := ProfileDirectories[0]
+  else
+    InstancePage.Values[0] := '';
+end;
+
+procedure DeinitializeSetup();
+begin
+  ProfileDirectories.Free;
 end;
 
 function NextButtonClick(CurPageID: Integer): Boolean;
 var
   InstanceDirectory: string;
+  ProfileIndex: Integer;
+  SelectedProfileIndex: Integer;
 begin
   Result := True;
+
+  if HasProfilePage and (CurPageID = ProfilePage.ID) then
+  begin
+    SelectedProfileIndex := -1;
+    for ProfileIndex := 0 to ProfileDirectories.Count - 1 do
+      if ProfilePage.Values[ProfileIndex] then
+        SelectedProfileIndex := ProfileIndex;
+
+    if SelectedProfileIndex < 0 then
+    begin
+      MsgBox('Choose the Minecraft profile where SkuaCraft should be installed.', mbError, MB_OK);
+      Result := False;
+      Exit;
+    end;
+
+    InstancePage.Values[0] := ProfileDirectories[SelectedProfileIndex];
+    Exit;
+  end;
 
   if CurPageID <> InstancePage.ID then
     Exit;
