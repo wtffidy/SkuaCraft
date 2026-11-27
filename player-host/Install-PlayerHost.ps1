@@ -15,30 +15,13 @@ $PublishDirectory = if (Test-Path (Join-Path $ScriptDirectory "SkuaCraft.PlayerH
 }
 $PlayerHostExecutable = Join-Path $PublishDirectory "SkuaCraft.PlayerHost.exe"
 
-function Select-MinecraftInstance {
-    Add-Type -AssemblyName System.Windows.Forms
-    $Dialog = [System.Windows.Forms.FolderBrowserDialog]::new()
-    try {
-        $Dialog.Description = "Select your Minecraft / CurseForge instance folder"
-        $Dialog.ShowNewFolderButton = $false
-
-        if ($Dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) {
-            return $null
-        }
-
-        return $Dialog.SelectedPath
-    }
-    finally {
-        $Dialog.Dispose()
-    }
+if ([string]::IsNullOrWhiteSpace($InstancePath)) {
+    $InstancePath = Read-Host "Paste the Minecraft instance folder path (the folder containing mods and/or config)"
 }
 
+$InstancePath = [Environment]::ExpandEnvironmentVariables($InstancePath.Trim().Trim('"').Trim("'"))
 if ([string]::IsNullOrWhiteSpace($InstancePath)) {
-    $InstancePath = Select-MinecraftInstance
-    if ([string]::IsNullOrWhiteSpace($InstancePath)) {
-        Write-Host "[INFO] Installation cancelled." -ForegroundColor Yellow
-        exit 0
-    }
+    throw "No Minecraft instance folder was provided."
 }
 
 $InstancePath = [IO.Path]::GetFullPath($InstancePath)
@@ -63,7 +46,7 @@ if (-not (Test-Path -LiteralPath $PlayerHostExecutable -PathType Leaf)) {
     }
 
     if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
-        throw ".NET 10 SDK is required to publish PlayerHost. Install it or extract the PlayerHost release ZIP beside this script."
+        throw ".NET 10 SDK is required to publish PlayerHost. Install it from https://dotnet.microsoft.com/download/dotnet/10.0."
     }
 
     Write-Host "[SKUA] Publishing self-contained Windows PlayerHost..." -ForegroundColor Cyan
