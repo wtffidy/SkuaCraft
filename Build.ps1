@@ -439,20 +439,7 @@ Write-Host "[SKUA] Running Gradle build..." -ForegroundColor Cyan
 
 $GradleArguments = @("build", "--no-daemon")
 if (-not [string]::IsNullOrWhiteSpace($ProjectVersion)) {
-    $VersionPattern = '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(alpha|beta)\.[1-9]\d*)?$'
-    if ($ProjectVersion -notmatch $VersionPattern) {
-        throw "Invalid project version '$ProjectVersion'. Use semantic versioning such as 0.1.0-alpha.3, 0.1.0-beta.1 or 1.0.0."
-    }
-
-    $GradleArguments += "-PskuacraftVersion=$ProjectVersion"
-    Write-Host "[SKUA] Building release version $ProjectVersion." -ForegroundColor Cyan
-}
-
-Push-Location $ProjectRoot
-try {
-    & $GradlePath @GradleArguments
-    $BuildExitCode = $LASTEXITCODE
-}
+    $VersionPattern = '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(alpha|beta)\.[1-9]\d*)?
 finally {
     Pop-Location
 }
@@ -746,7 +733,8 @@ Write-Host ""
 Write-Host "[SUCCESS] SkuaCraft and PlayerHost build completed." -ForegroundColor Green
 Write-Host "Mod JAR output: $DistributionDirectory"
 Write-Host "PlayerHost output: $PlayerHostPublishDirectory"
-) {
+
+    if ($ProjectVersion -notmatch $VersionPattern) {
         throw "Invalid project version '$ProjectVersion'. Use semantic versioning such as 0.1.0-alpha.3, 0.1.0-beta.1 or 1.0.0."
     }
 
