@@ -13,7 +13,7 @@ namespace SkuaCraft.PlayerHost;
 public sealed class PlayerScriptsService : ObservableObject, IGetScriptsService
 {
     private const string RawRoot = "https://raw.githubusercontent.com/wtffidy/Scripts-for-bullshit/refs/heads/Skua/";
-    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(45) };
+    private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(90) };
     private readonly ConcurrentDictionary<string, SemaphoreSlim> downloads = new(StringComparer.OrdinalIgnoreCase);
 
     public RangedObservableCollection<ScriptInfo> Scripts { get; } = new();
@@ -113,12 +113,13 @@ public sealed class PlayerScriptsService : ObservableObject, IGetScriptsService
 
         try
         {
-            if (File.Exists(destination))
+            if (File.Exists(destination) && !string.IsNullOrWhiteSpace(info.Sha256))
             {
                 string localHash = await ComputeSha256Async(destination, token).ConfigureAwait(false);
-                if (string.IsNullOrWhiteSpace(info.Sha256)
-                    || string.Equals(localHash, info.Sha256, StringComparison.OrdinalIgnoreCase))
+                if (string.Equals(localHash, info.Sha256, StringComparison.OrdinalIgnoreCase))
                 {
+                    byte[] localContents = await File.ReadAllBytesAsync(destination, token).ConfigureAwait(false);
+                    ScriptTrust.RecordOfficial(info.FilePath, localContents);
                     info.CachedDownloaded = true;
                     info.CachedLocalSize = (int)new FileInfo(destination).Length;
                     return;

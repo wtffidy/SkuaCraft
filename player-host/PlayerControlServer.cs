@@ -1,6 +1,7 @@
 using Skua.Core.Interfaces;
 using Skua.Core.Models.GitHub;
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
@@ -213,7 +214,10 @@ public sealed class PlayerControlServer : IAsyncDisposable
                 return (404, new { success = false, message = "That script is not in the configured Skua catalogue." });
             }
 
+            Stopwatch commandTimer = Stopwatch.StartNew();
+            Console.WriteLine($"[PlayerControl] {request.Path} requested for {info.FilePath}.");
             await scripts.DownloadScriptAsync(info, cancellationToken).ConfigureAwait(false);
+            Console.WriteLine($"[PlayerControl] Verified {info.FilePath} in {commandTimer.ElapsedMilliseconds} ms.");
 
             if (request.Path.EndsWith("/download", StringComparison.OrdinalIgnoreCase))
             {
@@ -228,9 +232,19 @@ public sealed class PlayerControlServer : IAsyncDisposable
             }
 
             Exception? startError = await scriptManager.StartScript().ConfigureAwait(false);
-            return startError is null
-                ? (200, new { success = true, message = $"Started {info.Name}.", path = info.FilePath })
-                : (400, new { success = false, message = startError.Message, path = info.FilePath });
+            if (startError is not null)
+            {
+                Console.WriteLine($"[PlayerControl] Start failed for {info.FilePath}: {startError}");
+                return (400, new
+                {
+                    success = false,
+                    message = $"Could not start {info.Name}: {startError.Message}",
+                    path = info.FilePath
+                });
+            }
+
+            Console.WriteLine($"[PlayerControl] Started {info.FilePath} in {commandTimer.ElapsedMilliseconds} ms.");
+            return (200, new { success = true, message = $"Started {info.Name}.", path = info.FilePath });
         }
 
         if (request.Path.Equals("/api/scripts/stop", StringComparison.OrdinalIgnoreCase))

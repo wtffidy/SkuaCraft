@@ -1,13 +1,14 @@
 package io.github.wtffidy.skuacraft.client;
 
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
+import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
 public final class SkuaToolsPanel {
     private static final int SHELL = 0xF0151D2B;
@@ -21,15 +22,21 @@ public final class SkuaToolsPanel {
     private static final int RED = 0xFFFF777D;
     private static final int TEXT = 0xFFE8F1F4;
     private static final int MUTED = 0xFF91A5B4;
+    private static final int ROW_HEIGHT = 20;
+    private static final int MAX_PAGE_SIZE = 12;
 
     private final List<JsonObject> scripts = new ArrayList<>();
 
     private JsonObject playerStatus = new JsonObject();
     private String selectedScriptPath = "";
+    private String searchText = "";
     private String message = "Connect to the embedded Skua runtime to load scripts.";
     private boolean open;
     private boolean scriptsLoading;
-    private int scriptOffset;
+    private boolean searchFocused;
+    private boolean searchSelected;
+    private int searchCaret;
+    private int pageIndex;
 
     public boolean isOpen() {
         return open;
@@ -43,6 +50,8 @@ public final class SkuaToolsPanel {
         this.open = open;
         if (open) {
             refresh();
+        } else {
+            searchFocused = false;
         }
     }
 
@@ -77,7 +86,7 @@ public final class SkuaToolsPanel {
     private void handleScripts(JsonElement response) {
         scriptsLoading = false;
         scripts.clear();
-        scriptOffset = 0;
+        pageIndex = 0;
 
         if (response != null && response.isJsonObject()) {
             JsonObject result = response.getAsJsonObject();
@@ -100,13 +109,20 @@ public final class SkuaToolsPanel {
     }
 
     private void post(String endpoint, JsonObject body) {
-        message = "Sending command to Skua Core...";
+        message = endpoint.endsWith("/start")
+                ? "Downloading, verifying and compiling script..."
+                : endpoint.endsWith("/load")
+                    ? "Downloading and loading script..."
+                    : "Sending command to Skua Core...";
+
         PlayerControlClient.post(endpoint, body, result -> {
             if (result != null && result.isJsonObject()) {
                 JsonObject response = result.getAsJsonObject();
+                boolean successful = isSuccessful(response);
                 message = getString(response, "message",
-                        isSuccessful(response) ? "Command accepted." : "Skua command failed.");
-                if (isSuccessful(response)) {
+                        successful ? "Command accepted." : "Skua command failed.");
+
+                if (successful) {
                     refresh();
                 }
                 return;
@@ -117,9 +133,15 @@ public final class SkuaToolsPanel {
     }
 
     private static boolean isSuccessful(JsonObject object) {
-        return object != null
-                && (!object.has("success") || object.get("success").isJsonNull()
-                || object.get("success").getAsBoolean());
+        if (object == null || !object.has("success") || object.get("success").isJsonNull()) {
+            return true;
+        }
+
+        try {
+            return object.get("success").getAsBoolean();
+        } catch (RuntimeException exception) {
+            return false;
+        }
     }
 
     private static String getString(JsonObject object, String key, String fallback) {
@@ -163,11 +185,11 @@ public final class SkuaToolsPanel {
     }
 
     private int panelX(int screenWidth) {
-        return Math.max(8, screenWidth - Math.min(278, screenWidth - 16) - 8);
+        return Math.max(8, screenWidth - Math.min(340, screenWidth - 16) - 8);
     }
 
     private int panelWidth(int screenWidth) {
-        return Math.min(278, screenWidth - 16);
+        return Math.min(340, screenWidth - 16);
     }
 
     private int panelY() {
@@ -175,7 +197,21 @@ public final class SkuaToolsPanel {
     }
 
     private int panelHeight(int screenHeight) {
-        return screenHeight - 83;
+        return Math.max(132, screenHeight - panelY() - 8);
+    }
+
+    private PanelLayout layout(int screenWidth, int screenHeight) {
+        int x = panelX(screenWidth);
+        int y = panelY();
+        int width = panelWidth(screenWidth);
+        int height = panelHeight(screenHeight);
+        int searchY = y + 58;
+        int pageY = y + 80;
+        int listTop = y + 102;
+        int actionY = y + height - 73;
+        int listBottom = actionY - 6;
+        int pageSize = Math.max(1, Math.min(MAX_PAGE_SIZE, (listBottom - listTop) / ROW_HEIGHT));
+        return new PanelLayout(x, y, width, height, searchY, pageY, listTop, listBottom, actionY, pageSize);
     }
 
     public boolean isPointerOver(double mouseX, double mouseY, int screenWidth, int screenHeight) {
@@ -183,10 +219,9 @@ public final class SkuaToolsPanel {
             return false;
         }
 
-        int x = panelX(screenWidth);
-        int y = panelY();
-        return mouseX >= x && mouseX <= x + panelWidth(screenWidth)
-                && mouseY >= y && mouseY <= y + panelHeight(screenHeight);
+        PanelLayout layout = layout(screenWidth, screenHeight);
+        return mouseX >= layout.x && mouseX <= layout.x + layout.width
+                && mouseY >= layout.y && mouseY <= layout.y + layout.height;
     }
 
     public void render(GuiGraphics graphics, Font font, int screenWidth, int screenHeight, int mouseX, int mouseY) {
@@ -194,75 +229,91 @@ public final class SkuaToolsPanel {
             return;
         }
 
-        int x = panelX(screenWidth);
-        int y = panelY();
-        int width = panelWidth(screenWidth);
-        int height = panelHeight(screenHeight);
+        PanelLayout layout = layout(screenWidth, screenHeight);
+        int x = layout.x;
+        int y = layout.y;
+        int width = layout.width;
         int right = x + width;
 
-        graphics.fill(x - 3, y - 3, right + 3, y + height + 3, 0xB8000000);
-        graphics.fill(x, y, right, y + height, SHELL);
-        graphics.fill(x + 4, y + 4, right - 4, y + height - 4, INK);
+        List<JsonObject> filtered = getFilteredScripts();
+        int pageCount = Math.max(1, (filtered.size() + layout.pageSize - 1) / layout.pageSize);
+        pageIndex = Math.max(0, Math.min(pageIndex, pageCount - 1));
+        int start = pageIndex * layout.pageSize;
+        int end = Math.min(filtered.size(), start + layout.pageSize);
+
+        graphics.fill(x - 3, y - 3, right + 3, y + layout.height + 3, 0xB8000000);
+        graphics.fill(x, y, right, y + layout.height, SHELL);
+        graphics.fill(x + 4, y + 4, right - 4, y + layout.height - 4, INK);
         graphics.fill(x + 10, y + 10, right - 10, y + 11, TEAL_DARK);
 
-        graphics.drawString(font, "SKUA TOOLS", x + 15, y + 15, TEAL, false);
+        graphics.drawString(font, "SKUA TOOLS", x + 15, y + 9, TEAL, false);
         graphics.drawString(font, "CORE LINK  " + (PlayerControlClient.isConnected() ? "ONLINE" : "OFFLINE"),
-                x + 15, y + 31, PlayerControlClient.isConnected() ? TEAL : RED, false);
+                x + 15, y + 25, PlayerControlClient.isConnected() ? TEAL : RED, false);
 
-        drawButton(graphics, font, right - 76, y + 12, 61, 22, "REFRESH", VIOLET, false);
+        drawButton(graphics, font, right - 76, y + 7, 61, 22, "REFRESH", VIOLET, false);
 
-        String username = getString(playerStatus, "username", "Waiting for AQW...");
+        String username = getString(playerStatus, "username", "AQW not connected");
         String map = getString(playerStatus, "map", "Unknown map");
         String server = getString(playerStatus, "server", "Unknown");
-        graphics.drawString(font, clip(font, username + "  ·  Lv " + getNumber(playerStatus, "level"), width - 30),
-                x + 15, y + 55, TEXT, false);
-        graphics.drawString(font, clip(font, map + "  /  " + server, width - 30),
-                x + 15, y + 69, MUTED, false);
+        String summary = username + "  ·  Lv " + getNumber(playerStatus, "level") + "  ·  " + map + " / " + server;
+        graphics.drawString(font, clip(font, summary, width - 30), x + 15, y + 42, TEXT, false);
 
-        int listTop = y + 91;
-        int listBottom = y + height - 100;
-        int rowHeight = 23;
-        int visibleRows = Math.max(1, (listBottom - listTop) / rowHeight);
-        int end = Math.min(scripts.size(), scriptOffset + visibleRows);
+        graphics.fill(x + 10, layout.searchY, right - 10, layout.searchY + 18,
+                searchFocused ? PANEL_ALT : PANEL);
+        graphics.fill(x + 10, layout.searchY, x + 12, layout.searchY + 18,
+                searchFocused ? TEAL : MUTED);
+        String searchDisplay = searchText.isEmpty() ? "Search name, folder, or description..." : searchText;
+        graphics.drawString(font, clip(font, searchDisplay, width - 42),
+                x + 18, layout.searchY + 5, searchText.isEmpty() ? MUTED : TEXT, false);
+        if (searchFocused) {
+            int cursorX = x + 18 + font.width(clip(font, searchText.substring(0, searchCaret), width - 42));
+            graphics.fill(Math.min(cursorX, right - 18), layout.searchY + 4,
+                    Math.min(cursorX, right - 18) + 1, layout.searchY + 15, TEAL);
+        }
 
-        graphics.drawString(font, scripts.size() + " SCRIPTS  /  YOUR FORK", x + 15, listTop - 14, VIOLET, false);
+        String countText = filtered.size() + " MATCHES  ·  PAGE " + (pageIndex + 1) + "/" + pageCount;
+        graphics.drawString(font, clip(font, countText, width - 100), x + 15, layout.pageY + 5, VIOLET, false);
+        drawButton(graphics, font, right - 65, layout.pageY, 25, 18, "<", VIOLET, pageIndex > 0);
+        drawButton(graphics, font, right - 36, layout.pageY, 25, 18, ">", VIOLET, pageIndex + 1 < pageCount);
 
-        for (int i = scriptOffset; i < end; i++) {
-            JsonObject script = scripts.get(i);
-            int rowY = listTop + (i - scriptOffset) * rowHeight;
+        for (int i = start; i < end; i++) {
+            JsonObject script = filtered.get(i);
+            int rowY = layout.listTop + (i - start) * ROW_HEIGHT;
             boolean selected = getString(script, "path", "").equals(selectedScriptPath);
             boolean hovered = mouseX >= x + 10 && mouseX <= right - 10
-                    && mouseY >= rowY && mouseY <= rowY + rowHeight - 2;
+                    && mouseY >= rowY && mouseY <= rowY + ROW_HEIGHT - 2;
 
-            graphics.fill(x + 10, rowY, right - 10, rowY + rowHeight - 2,
+            graphics.fill(x + 10, rowY, right - 10, rowY + ROW_HEIGHT - 2,
                     selected ? TEAL_DARK : hovered ? PANEL_ALT : PANEL);
 
             String name = getString(script, "name", getString(script, "fileName", "Unnamed"));
             String category = getString(script, "category", category(script));
             String state = getBoolean(script, "downloaded") ? "LOCAL" : "REMOTE";
             graphics.drawString(font, clip(font, name, width - 105),
-                    x + 17, rowY + 7, TEXT, false);
+                    x + 17, rowY + 6, TEXT, false);
             graphics.drawString(font, clip(font, category + " · " + state, 85),
-                    right - 94, rowY + 7, selected ? TEAL : MUTED, false);
+                    right - 94, rowY + 6, selected ? TEAL : MUTED, false);
         }
 
-        if (scripts.isEmpty()) {
+        if (filtered.isEmpty()) {
             String empty = scriptsLoading ? "Loading script catalogue..."
-                    : "Open the player host log if the catalogue did not load.";
-            graphics.drawString(font, clip(font, empty, width - 30), x + 15, listTop + 12, MUTED, false);
+                    : searchText.isBlank() ? "No scripts are available."
+                    : "No scripts match that search.";
+            graphics.drawString(font, clip(font, empty, width - 30), x + 15, layout.listTop + 6, MUTED, false);
         }
 
-        int actionY = y + height - 81;
-        int gap = 6;
-        int buttonWidth = (width - 30 - gap) / 2;
-        drawButton(graphics, font, x + 10, actionY, buttonWidth, 24, "LOAD", TEAL, false);
-        drawButton(graphics, font, x + 16 + buttonWidth, actionY, buttonWidth, 24, "START", AMBER, false);
-        drawButton(graphics, font, x + 10, actionY + 29, buttonWidth, 24, "PAUSE / RESUME", VIOLET, false);
-        drawButton(graphics, font, x + 16 + buttonWidth, actionY + 29, buttonWidth, 24, "STOP", RED, false);
+        int buttonWidth = (width - 30 - 6) / 2;
+        drawButton(graphics, font, x + 10, layout.actionY, buttonWidth, 20, "LOAD", TEAL, false);
+        drawButton(graphics, font, x + 16 + buttonWidth, layout.actionY, buttonWidth, 20, "START", AMBER, false);
+        drawButton(graphics, font, x + 10, layout.actionY + 24, buttonWidth, 20, "PAUSE / RESUME", VIOLET, false);
+        drawButton(graphics, font, x + 16 + buttonWidth, layout.actionY + 24, buttonWidth, 20, "STOP", RED, false);
 
-        graphics.fill(x + 10, y + height - 22, right - 10, y + height - 21, 0xFF34485B);
         graphics.drawString(font, clip(font, message, width - 30),
-                x + 15, y + height - 14, message.toLowerCase().contains("fail") ? RED : MUTED, false);
+                x + 15, y + layout.height - 14,
+                message.toLowerCase(Locale.ROOT).contains("fail")
+                        || message.toLowerCase(Locale.ROOT).contains("could not")
+                        || message.toLowerCase(Locale.ROOT).contains("error") ? RED : MUTED,
+                false);
     }
 
     public boolean mouseClicked(double mouseX, double mouseY, int button, int screenWidth, int screenHeight) {
@@ -270,47 +321,203 @@ public final class SkuaToolsPanel {
             return false;
         }
 
-        int x = panelX(screenWidth);
-        int y = panelY();
-        int width = panelWidth(screenWidth);
-        int height = panelHeight(screenHeight);
+        PanelLayout layout = layout(screenWidth, screenHeight);
+        int x = layout.x;
+        int y = layout.y;
+        int width = layout.width;
         int right = x + width;
 
-        if (inside(mouseX, mouseY, right - 76, y + 12, 61, 22)) {
+        if (inside(mouseX, mouseY, right - 76, y + 7, 61, 22)) {
+            searchFocused = false;
             refresh();
             return true;
         }
 
-        int listTop = y + 91;
-        int listBottom = y + height - 100;
-        int rowHeight = 23;
-        int visibleRows = Math.max(1, (listBottom - listTop) / rowHeight);
-        int end = Math.min(scripts.size(), scriptOffset + visibleRows);
+        if (inside(mouseX, mouseY, x + 10, layout.searchY, width - 20, 18)) {
+            searchFocused = true;
+            searchCaret = searchText.length();
+            searchSelected = false;
+            return true;
+        }
 
-        for (int i = scriptOffset; i < end; i++) {
-            int rowY = listTop + (i - scriptOffset) * rowHeight;
-            if (inside(mouseX, mouseY, x + 10, rowY, width - 20, rowHeight - 2)) {
-                selectedScriptPath = getString(scripts.get(i), "path", "");
-                message = "Selected " + getString(scripts.get(i), "name", selectedScriptPath);
+        searchFocused = false;
+        List<JsonObject> filtered = getFilteredScripts();
+        int pageCount = Math.max(1, (filtered.size() + layout.pageSize - 1) / layout.pageSize);
+
+        if (inside(mouseX, mouseY, right - 65, layout.pageY, 25, 18)) {
+            pageIndex = Math.max(0, pageIndex - 1);
+            return true;
+        }
+
+        if (inside(mouseX, mouseY, right - 36, layout.pageY, 25, 18)) {
+            pageIndex = Math.min(pageCount - 1, pageIndex + 1);
+            return true;
+        }
+
+        int start = pageIndex * layout.pageSize;
+        int end = Math.min(filtered.size(), start + layout.pageSize);
+        for (int i = start; i < end; i++) {
+            int rowY = layout.listTop + (i - start) * ROW_HEIGHT;
+            if (inside(mouseX, mouseY, x + 10, rowY, width - 20, ROW_HEIGHT - 2)) {
+                selectedScriptPath = getString(filtered.get(i), "path", "");
+                message = "Selected " + getString(filtered.get(i), "name", selectedScriptPath);
                 return true;
             }
         }
 
-        int actionY = y + height - 81;
-        int gap = 6;
-        int buttonWidth = (width - 30 - gap) / 2;
-
-        if (inside(mouseX, mouseY, x + 10, actionY, buttonWidth, 24)) {
+        int buttonWidth = (width - 30 - 6) / 2;
+        if (inside(mouseX, mouseY, x + 10, layout.actionY, buttonWidth, 20)) {
             sendSelected("scripts/load");
-        } else if (inside(mouseX, mouseY, x + 16 + buttonWidth, actionY, buttonWidth, 24)) {
+        } else if (inside(mouseX, mouseY, x + 16 + buttonWidth, layout.actionY, buttonWidth, 20)) {
             sendSelected("scripts/start");
-        } else if (inside(mouseX, mouseY, x + 10, actionY + 29, buttonWidth, 24)) {
+        } else if (inside(mouseX, mouseY, x + 10, layout.actionY + 24, buttonWidth, 20)) {
             post("scripts/pause", emptyBody());
-        } else if (inside(mouseX, mouseY, x + 16 + buttonWidth, actionY + 29, buttonWidth, 24)) {
+        } else if (inside(mouseX, mouseY, x + 16 + buttonWidth, layout.actionY + 24, buttonWidth, 20)) {
             post("scripts/stop", emptyBody());
         }
 
         return true;
+    }
+
+    public boolean mouseScrolled(double mouseX, double mouseY, double delta, int screenWidth, int screenHeight) {
+        if (!isPointerOver(mouseX, mouseY, screenWidth, screenHeight)) {
+            return false;
+        }
+
+        PanelLayout layout = layout(screenWidth, screenHeight);
+        List<JsonObject> filtered = getFilteredScripts();
+        int pageCount = Math.max(1, (filtered.size() + layout.pageSize - 1) / layout.pageSize);
+
+        if (delta > 0) {
+            pageIndex = Math.max(0, pageIndex - 1);
+        } else if (delta < 0) {
+            pageIndex = Math.min(pageCount - 1, pageIndex + 1);
+        }
+
+        return true;
+    }
+
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (!searchFocused) {
+            return false;
+        }
+
+        if (keyCode == GLFW.GLFW_KEY_ENTER || keyCode == GLFW.GLFW_KEY_KP_ENTER
+                || keyCode == GLFW.GLFW_KEY_ESCAPE) {
+            searchFocused = false;
+            searchSelected = false;
+            return true;
+        }
+
+        if ((modifiers & GLFW.GLFW_MOD_CONTROL) != 0 && keyCode == GLFW.GLFW_KEY_A) {
+            searchSelected = true;
+            return true;
+        }
+
+        if (keyCode == GLFW.GLFW_KEY_BACKSPACE) {
+            if (searchSelected) {
+                searchText = "";
+                searchCaret = 0;
+                searchSelected = false;
+            } else if (searchCaret > 0) {
+                searchText = searchText.substring(0, searchCaret - 1) + searchText.substring(searchCaret);
+                searchCaret--;
+            }
+
+            pageIndex = 0;
+            return true;
+        }
+
+        if (keyCode == GLFW.GLFW_KEY_DELETE) {
+            if (searchSelected) {
+                searchText = "";
+                searchCaret = 0;
+                searchSelected = false;
+            } else if (searchCaret < searchText.length()) {
+                searchText = searchText.substring(0, searchCaret) + searchText.substring(searchCaret + 1);
+            }
+
+            pageIndex = 0;
+            return true;
+        }
+
+        if (keyCode == GLFW.GLFW_KEY_LEFT) {
+            searchCaret = Math.max(0, searchCaret - 1);
+            searchSelected = false;
+            return true;
+        }
+
+        if (keyCode == GLFW.GLFW_KEY_RIGHT) {
+            searchCaret = Math.min(searchText.length(), searchCaret + 1);
+            searchSelected = false;
+            return true;
+        }
+
+        if (keyCode == GLFW.GLFW_KEY_HOME) {
+            searchCaret = 0;
+            searchSelected = false;
+            return true;
+        }
+
+        if (keyCode == GLFW.GLFW_KEY_END) {
+            searchCaret = searchText.length();
+            searchSelected = false;
+            return true;
+        }
+
+        return true;
+    }
+
+    public boolean charTyped(char codePoint, int modifiers) {
+        if (!searchFocused || Character.isISOControl(codePoint) || searchText.length() >= 120) {
+            return searchFocused;
+        }
+
+        if (searchSelected) {
+            searchText = "";
+            searchCaret = 0;
+            searchSelected = false;
+        }
+
+        searchText = searchText.substring(0, searchCaret) + codePoint + searchText.substring(searchCaret);
+        searchCaret++;
+        pageIndex = 0;
+        return true;
+    }
+
+    private List<JsonObject> getFilteredScripts() {
+        String query = searchText.trim().toLowerCase(Locale.ROOT);
+        if (query.isEmpty()) {
+            return scripts;
+        }
+
+        List<JsonObject> filtered = new ArrayList<>();
+        for (JsonObject script : scripts) {
+            String name = getString(script, "name", getString(script, "fileName", ""));
+            String path = getString(script, "path", "");
+            String description = getString(script, "description", "");
+            String category = getString(script, "category", category(script));
+            String tags = "";
+
+            JsonElement tagElement = script.get("tags");
+            if (tagElement != null && tagElement.isJsonArray()) {
+                List<String> values = new ArrayList<>();
+                for (JsonElement tag : tagElement.getAsJsonArray()) {
+                    if (tag != null && tag.isJsonPrimitive()) {
+                        values.add(tag.getAsString());
+                    }
+                }
+                tags = String.join(" ", values);
+            }
+
+            String searchable = (name + " " + path + " " + description + " " + category + " " + tags)
+                    .toLowerCase(Locale.ROOT);
+            if (searchable.contains(query)) {
+                filtered.add(script);
+            }
+        }
+
+        return filtered;
     }
 
     private void sendSelected(String endpoint) {
@@ -322,23 +529,6 @@ public final class SkuaToolsPanel {
         JsonObject body = new JsonObject();
         body.addProperty("path", selectedScriptPath);
         post(endpoint, body);
-    }
-
-
-
-    public boolean mouseScrolled(double mouseX, double mouseY, double delta, int screenWidth, int screenHeight) {
-        if (!isPointerOver(mouseX, mouseY, screenWidth, screenHeight)) {
-            return false;
-        }
-
-        int height = panelHeight(screenHeight);
-        int listTop = panelY() + 91;
-        int listBottom = panelY() + height - 100;
-        int visibleRows = Math.max(1, (listBottom - listTop) / 23);
-        int maxOffset = Math.max(0, scripts.size() - visibleRows);
-        scriptOffset = Math.max(0, Math.min(maxOffset,
-                scriptOffset - (int) Math.signum(delta) * 3));
-        return true;
     }
 
     private static void drawButton(GuiGraphics graphics, Font font, int x, int y, int width, int height,
@@ -369,5 +559,19 @@ public final class SkuaToolsPanel {
 
     private static boolean inside(double mouseX, double mouseY, int x, int y, int width, int height) {
         return mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + height;
+    }
+
+    private record PanelLayout(
+            int x,
+            int y,
+            int width,
+            int height,
+            int searchY,
+            int pageY,
+            int listTop,
+            int listBottom,
+            int actionY,
+            int pageSize
+    ) {
     }
 }

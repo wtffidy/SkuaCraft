@@ -97,10 +97,14 @@ public final class SkuaPlayerScreen extends Screen {
     }
 
     private void layoutBrowser() {
-        browserX = 18;
-        browserY = 48;
-        browserWidth = Math.max(160, width - 36);
-        browserHeight = Math.max(100, height - 78);
+        int availableWidth = Math.max(160, width - 36);
+        int availableHeight = Math.max(100, height - 78);
+        double scale = Math.min(availableWidth / 960.0, availableHeight / 550.0);
+
+        browserWidth = Math.max(160, (int) Math.round(960.0 * scale));
+        browserHeight = Math.max(100, (int) Math.round(550.0 * scale));
+        browserX = (width - browserWidth) / 2;
+        browserY = 48 + (availableHeight - browserHeight) / 2;
     }
 
     private void resizeBrowser() {
@@ -327,6 +331,7 @@ public final class SkuaPlayerScreen extends Screen {
         }
 
         if (toolsPanel.isOpen()) {
+            toolsPanel.keyPressed(keyCode, scanCode, modifiers);
             return true;
         }
 
@@ -357,6 +362,7 @@ public final class SkuaPlayerScreen extends Screen {
     @Override
     public boolean charTyped(char codePoint, int modifiers) {
         if (toolsPanel.isOpen()) {
+            toolsPanel.charTyped(codePoint, modifiers);
             return true;
         }
 
