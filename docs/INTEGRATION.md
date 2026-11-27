@@ -51,6 +51,8 @@ Scripts-for-bullshit remains a source of script categories and metadata only. Sk
 
 ## Verification gates
 
+The player host currently supplies a transparent 1×1 PNG for Skua Core screenshot requests. Rinku owns the actual browser texture inside the Minecraft process, while Skua Core runs in a separate .NET process. A real screenshot bridge therefore needs a Minecraft-side texture readback plus an authenticated transfer to the host; returning a fabricated image is not considered a completed implementation.
+
 The source integration is not considered complete until the following are tested in the actual Project Infinity client:
 
 - Rinku initializes and displays the local Ruffle page.

@@ -48,13 +48,15 @@ The MVS v1.0.6 source is pinned as a Git submodule at vendor/MVS. The desktop Vi
 
 ## 📦 Installation
 
-The Minecraft mod and Windows player host are distributed through GitHub Releases and prereleases.
+Versioned GitHub Releases contain both installable pieces: the Minecraft mod JAR and the self-contained Windows PlayerHost ZIP. Pushing a matching `v*` version tag builds, smoke-tests and publishes a release automatically. Pull requests and ordinary branch builds only run validation; they do not publish downloads.
 
-1. Download the mod JAR and Windows PlayerHost package from the latest SkuaCraft GitHub Release or prerelease.
+1. Download both `SkuaCraft-<version>.jar` and `SkuaCraft-PlayerHost-win-x64-<version>.zip` from the [SkuaCraft Releases page](https://github.com/wtffidy/SkuaCraft/releases).
 2. Install the mod JAR and its required Rinku 3.0.4 library in the Project Infinity instance.
 3. Extract the player-host files into:
    <escape><code>&lt;Minecraft instance&gt;/config/skuacraft/player-host/</code></escape>
 4. Launch Minecraft, equip the Skua Console and right-click it.
+
+The PlayerHost ZIP contains the executable and its runtime files. Keep the extracted files together in the `player-host` directory. Rinku 3.0.4 remains a separate required Minecraft mod/library and is not bundled into the SkuaCraft JAR.
 
 On first launch, Rinku may download its matching Chromium/JCEF runtime. The player host then starts locally, writes a short-lived session file and serves the Ruffle page through a tokenized loopback URL.
 
@@ -107,7 +109,7 @@ The scripts repository is reference material. SkuaCraft does not generate, autho
 
 The repository now contains the first embedded-player path: the handheld screen, Rinku browser integration, hidden .NET player-host project and pinned MVS runtime source.
 
-The next verification gate is a real end-to-end run in the Project Infinity instance: Ruffle loads the Skua SWF, AQW login succeeds, input and audio work, and the game state reaches Skua Core. Minecraft-native Skua tool screens and the two-hand handheld animation follow that proof of concept.
+The next verification gate is a real end-to-end run in the Project Infinity instance: Ruffle loads the Skua SWF, AQW login succeeds, input and audio work, and the game state reaches Skua Core. Minecraft-native Skua tool screens and the two-hand handheld animation follow that proof of concept. The current screenshot service still returns a transparent placeholder because Rinku's Minecraft-owned render texture is not yet bridged back to the separate .NET process.
 
 **The player host compiling is not the same as a verified live AQW session.** The full in-game login/play test still needs to pass before this can be called a working release.
 
