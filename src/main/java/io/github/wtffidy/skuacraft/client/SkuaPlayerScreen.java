@@ -36,6 +36,8 @@ public final class SkuaPlayerScreen extends Screen {
     private int browserY;
     private int browserWidth;
     private int browserHeight;
+    private int requestedBrowserPixelWidth;
+    private int requestedBrowserPixelHeight;
 
     public SkuaPlayerScreen() {
         super(Component.literal("Skua Player"));
@@ -112,16 +114,30 @@ public final class SkuaPlayerScreen extends Screen {
         browserY = 48 + Math.max(0, (availableHeight - browserHeight) / 2);
     }
 
+    private int getBrowserPixelWidth() {
+        double scale = minecraft.getWindow().getGuiScale();
+        return Math.max(1, (int) Math.round(browserWidth * scale));
+    }
+
+    private int getBrowserPixelHeight() {
+        double scale = minecraft.getWindow().getGuiScale();
+        return Math.max(1, (int) Math.round(browserHeight * scale));
+    }
+
     private void resizeBrowser() {
         if (browser == null || browserWidth <= 0 || browserHeight <= 0) {
             return;
         }
 
-        double scale = minecraft.getWindow().getGuiScale();
-        browser.resize(
-                Math.max(1, (int) (browserWidth * scale)),
-                Math.max(1, (int) (browserHeight * scale))
-        );
+        int pixelWidth = getBrowserPixelWidth();
+        int pixelHeight = getBrowserPixelHeight();
+        if (pixelWidth == requestedBrowserPixelWidth && pixelHeight == requestedBrowserPixelHeight) {
+            return;
+        }
+
+        browser.resize(pixelWidth, pixelHeight);
+        requestedBrowserPixelWidth = pixelWidth;
+        requestedBrowserPixelHeight = pixelHeight;
     }
 
     private void tryOpenPlayer() {
@@ -130,10 +146,11 @@ public final class SkuaPlayerScreen extends Screen {
         }
 
         try {
-            double scale = minecraft.getWindow().getGuiScale();
-            int pixelWidth = Math.max(1, (int) (browserWidth * scale));
-            int pixelHeight = Math.max(1, (int) (browserHeight * scale));
+            int pixelWidth = getBrowserPixelWidth();
+            int pixelHeight = getBrowserPixelHeight();
             browser = SkuaPlayerBrowserSession.openOrReuse(pageUrl, pixelWidth, pixelHeight);
+            requestedBrowserPixelWidth = pixelWidth;
+            requestedBrowserPixelHeight = pixelHeight;
             status = "SKUA PLAYER ONLINE  /  LOADING ADVENTUREQUEST WORLDS";
         } catch (RuntimeException exception) {
             status = "BROWSER ERROR  /  " + exception.getMessage();
@@ -150,6 +167,11 @@ public final class SkuaPlayerScreen extends Screen {
     @Override
     public void tick() {
         super.tick();
+
+        // Minecraft can change its GUI scale when the window is maximized or moved
+        // between displays. Keep the off-screen browser in sync with the live viewport.
+        layoutBrowser();
+        resizeBrowser();
 
         if (browser != null && browser.isTextureReady()
                 && status.startsWith("SKUA PLAYER ONLINE")) {
@@ -184,16 +206,20 @@ public final class SkuaPlayerScreen extends Screen {
         if (browser != null && browser.isTextureReady()) {
             ResourceLocation texture = browser.getTextureIdentifier();
             if (texture != null) {
+                int textureWidth = browser.getRenderer().getTextureWidth();
+                int textureHeight = browser.getRenderer().getTextureHeight();
                 graphics.blit(
                         texture,
                         browserX,
                         browserY,
-                        0.0F,
-                        0.0F,
                         browserWidth,
                         browserHeight,
-                        browser.getRenderer().getTextureWidth(),
-                        browser.getRenderer().getTextureHeight()
+                        0.0F,
+                        0.0F,
+                        textureWidth,
+                        textureHeight,
+                        textureWidth,
+                        textureHeight
                 );
             }
         } else {
@@ -238,11 +264,19 @@ public final class SkuaPlayerScreen extends Screen {
     }
 
     private int browserMouseX(double mouseX) {
-        return (int) ((mouseX - browserX) * minecraft.getWindow().getGuiScale());
+        if (browserWidth <= 0 || requestedBrowserPixelWidth <= 0) {
+            return 0;
+        }
+
+        return (int) ((mouseX - browserX) * requestedBrowserPixelWidth / browserWidth);
     }
 
     private int browserMouseY(double mouseY) {
-        return (int) ((mouseY - browserY) * minecraft.getWindow().getGuiScale());
+        if (browserHeight <= 0 || requestedBrowserPixelHeight <= 0) {
+            return 0;
+        }
+
+        return (int) ((mouseY - browserY) * requestedBrowserPixelHeight / browserHeight);
     }
 
     @Override
