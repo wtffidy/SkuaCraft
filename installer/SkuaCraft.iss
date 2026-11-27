@@ -79,6 +79,58 @@ end;
 
 // Finds a directory named "minecraft" with an "instances" child.
 // The depth limit keeps fallback discovery bounded on machines with large drives.
+function FindInstanceInsideInstancesDirectory(InstancesDirectory: string): string;
+var
+  FindRec: TFindRec;
+  CandidateDirectory: string;
+  SelectedDirectory: string;
+  ExistingSkuaCraftDirectory: string;
+  CandidateCount: Integer;
+begin
+  Result := '';
+  CandidateCount := 0;
+  SelectedDirectory := '';
+  ExistingSkuaCraftDirectory := '';
+
+  // Also support a path that is already an individual Minecraft instance.
+  if DirExists(AddBackslash(InstancesDirectory) + 'mods') or
+     DirExists(AddBackslash(InstancesDirectory) + 'config') then
+  begin
+    Result := InstancesDirectory;
+    Exit;
+  end;
+
+  if not FindFirst(AddBackslash(InstancesDirectory) + '*', FindRec) then
+    Exit;
+
+  try
+    repeat
+      if (FindRec.Name <> '.') and (FindRec.Name <> '..') and
+         ((FindRec.Attributes and $10) <> 0) then
+      begin
+        CandidateDirectory := AddBackslash(InstancesDirectory) + FindRec.Name;
+        if DirExists(AddBackslash(CandidateDirectory) + 'mods') or
+           DirExists(AddBackslash(CandidateDirectory) + 'config') then
+        begin
+          CandidateCount := CandidateCount + 1;
+          SelectedDirectory := CandidateDirectory;
+
+          // When several profiles exist, prefer the one already using SkuaCraft.
+          if DirExists(AddBackslash(CandidateDirectory) + 'config\skuacraft') then
+            ExistingSkuaCraftDirectory := CandidateDirectory;
+        end;
+      end;
+    until not FindNext(FindRec);
+  finally
+    FindClose(FindRec);
+  end;
+
+  if ExistingSkuaCraftDirectory <> '' then
+    Result := ExistingSkuaCraftDirectory
+  else if CandidateCount = 1 then
+    Result := SelectedDirectory;
+end;
+
 function FindMinecraftInstances(Directory: string; Depth: Integer): string;
 var
   FindRec: TFindRec;
@@ -95,8 +147,9 @@ begin
     CandidateDirectory := AddBackslash(Directory) + 'instances';
     if DirExists(CandidateDirectory) then
     begin
-      Result := CandidateDirectory;
-      Exit;
+      Result := FindInstanceInsideInstancesDirectory(CandidateDirectory);
+      if Result <> '' then
+        Exit;
     end;
   end;
 
@@ -138,7 +191,7 @@ begin
   CandidateDirectory := AddBackslash(ProfileDirectory) + 'curseforge\minecraft\Instances';
   if DirExists(CandidateDirectory) then
   begin
-    Result := CandidateDirectory;
+    Result := FindInstanceInsideInstancesDirectory(CandidateDirectory);
     Exit;
   end;
 
@@ -146,21 +199,21 @@ begin
   CandidateDirectory := AddBackslash(ExpandConstant('{userdocs}')) + 'CurseForge\Minecraft\Instances';
   if DirExists(CandidateDirectory) then
   begin
-    Result := CandidateDirectory;
+    Result := FindInstanceInsideInstancesDirectory(CandidateDirectory);
     Exit;
   end;
 
   CandidateDirectory := AddBackslash(ExpandConstant('{userappdata}')) + 'CurseForge\Minecraft\Instances';
   if DirExists(CandidateDirectory) then
   begin
-    Result := CandidateDirectory;
+    Result := FindInstanceInsideInstancesDirectory(CandidateDirectory);
     Exit;
   end;
 
   CandidateDirectory := AddBackslash(ExpandConstant('{localappdata}')) + 'CurseForge\Minecraft\Instances';
   if DirExists(CandidateDirectory) then
   begin
-    Result := CandidateDirectory;
+    Result := FindInstanceInsideInstancesDirectory(CandidateDirectory);
     Exit;
   end;
 
@@ -193,7 +246,7 @@ begin
     wpWelcome,
     'Choose your Minecraft instance',
     'Select the Forge instance folder',
-    'The installer looks for your CurseForge installation and preselects its Instances folder. If it cannot find it, it searches for other Minecraft\Instances folders on your local drives. You can still browse to a different instance.' + #13#10 + #13#10 +
+    'The installer looks for your CurseForge installation and preselects a Forge profile inside its Instances folder. If it finds multiple profiles, choose the correct profile folder. Otherwise, it searches for other Minecraft\Instances folders on your local drives. You can still browse to a different instance.' + #13#10 + #13#10 +
     'CurseForge: open the modpack profile menu and choose Open Folder.' + #13#10 +
     'Official Launcher: Installations > your Forge profile > Edit > More Options > Game Directory.',
     False,
