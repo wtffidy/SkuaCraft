@@ -71,8 +71,8 @@ public static class Program
             ApplyRuffleScalingPatch(playerHost);
             playerHost.Control.PageLog += message =>
             {
-                if (message.StartsWith("AQW stage:", StringComparison.Ordinal)
-                    || message.StartsWith("AQW stage diagnostic failed", StringComparison.Ordinal))
+                if (message.StartsWith("AQW root fit", StringComparison.Ordinal)
+                    || message.StartsWith("AQW root fit failed", StringComparison.Ordinal))
                 {
                     Console.WriteLine($"[AQW scaling] {message}");
                 }
@@ -162,34 +162,71 @@ public static class Program
         }
 
         const string stageDiagnostic = """
-    function logGameStage() {
+    let aqwFitTimer = 0;
+    let lastAqwFit = "";
+
+    function readAqwNumber(game, path) {
+        try {
+            const value = Number(JSON.parse(game.callExternalInterface("getGameObject", path)));
+            return Number.isFinite(value) ? value : 0;
+        } catch (error) {
+            return 0;
+        }
+    }
+
+    function fitAqwRootToStage() {
         if (!player || !player.ruffle) return;
 
         try {
             const game = player.ruffle();
-            const read = path => {
-                try {
-                    return JSON.parse(game.callExternalInterface("getGameObject", path));
-                } catch (error) {
-                    return "n/a";
-                }
-            };
+            const stageWidth = readAqwNumber(game, "stage.stageWidth") || 958;
+            const stageHeight = readAqwNumber(game, "stage.stageHeight") || 550;
+            const rootWidth = readAqwNumber(game, "width");
+            const rootHeight = readAqwNumber(game, "height");
+            const currentScaleX = readAqwNumber(game, "scaleX") || 1;
+            const currentScaleY = readAqwNumber(game, "scaleY") || 1;
 
-            log("AQW stage: " + read("stage.stageWidth") + "x" + read("stage.stageHeight")
-                + ", root " + read("width") + "x" + read("height")
-                + ", scale " + read("scaleX") + "," + read("scaleY")
-                + ", position " + read("x") + "," + read("y")
-                + ", mode " + read("stage.scaleMode"));
+            if (rootWidth <= 0 || rootHeight <= 0 || stageWidth <= 0 || stageHeight <= 0) return;
+
+            // DisplayObject.width/height include the current transform. Convert
+            // back to the unscaled bounds so repeated checks remain idempotent.
+            const baseWidth = rootWidth / Math.abs(currentScaleX);
+            const baseHeight = rootHeight / Math.abs(currentScaleY);
+            const fitScale = Math.min(stageWidth / baseWidth, stageHeight / baseHeight);
+            if (!Number.isFinite(fitScale) || fitScale <= 0) return;
+
+            const targetScaleX = Math.sign(currentScaleX) * fitScale;
+            const targetScaleY = Math.sign(currentScaleY) * fitScale;
+
+            if (Math.abs(currentScaleX - targetScaleX) > 0.001)
+                game.callExternalInterface("setGameObject", "scaleX", targetScaleX);
+            if (Math.abs(currentScaleY - targetScaleY) > 0.001)
+                game.callExternalInterface("setGameObject", "scaleY", targetScaleY);
+
+            const signature = [baseWidth, baseHeight, stageWidth, stageHeight, fitScale].map(value => value.toFixed(2)).join("|");
+            if (signature !== lastAqwFit) {
+                lastAqwFit = signature;
+                log("AQW root fit: source " + baseWidth.toFixed(1) + "x" + baseHeight.toFixed(1)
+                    + ", stage " + stageWidth + "x" + stageHeight
+                    + ", scale " + fitScale.toFixed(5)
+                    + ", expected " + (baseWidth * fitScale).toFixed(1) + "x" + (baseHeight * fitScale).toFixed(1));
+            }
         } catch (error) {
-            log("AQW stage diagnostic failed: " + error);
+            log("AQW root fit failed: " + error);
         }
+    }
+
+    function startAqwFitMonitor() {
+        if (aqwFitTimer) clearInterval(aqwFitTimer);
+        fitAqwRootToStage();
+        aqwFitTimer = setInterval(fitAqwRootToStage, 500);
     }
 
 """;
         bridge = bridge.Replace(fitFunctionMarker, stageDiagnostic + fitFunctionMarker, StringComparison.Ordinal);
         bridge = bridge.Replace(
             loadedHandler,
-            loadedHandler[..^1] + " setTimeout(logGameStage, 0); }",
+            loadedHandler[..^1] + " setTimeout(startAqwFitMonitor, 0); }",
             StringComparison.Ordinal
         );
 
