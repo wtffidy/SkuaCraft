@@ -178,6 +178,30 @@ public static class Program
             throw new InvalidOperationException("The Skua game-loaded callback changed; the AQW stage-fit patch was not applied.");
         }
 
+        const string externalCallMonitor = """
+    let aqwCallWindowStarted = performance.now();
+    let aqwCallWindowCount = 0;
+    let aqwCallSlowCount = 0;
+
+    function reportAqwExternalCall(name, startedAt) {
+        const elapsed = performance.now() - startedAt;
+        aqwCallWindowCount++;
+
+        if (elapsed >= 100) {
+            aqwCallSlowCount++;
+            log("AQW ExternalInterface slow call: " + name + " took " + elapsed.toFixed(1) + " ms");
+        }
+
+        const now = performance.now();
+        if (now - aqwCallWindowStarted >= 1000 && aqwCallWindowCount > 0) {
+            log("AQW ExternalInterface throughput: " + aqwCallWindowCount + " calls/s, " + aqwCallSlowCount + " slow");
+            aqwCallWindowStarted = now;
+            aqwCallWindowCount = 0;
+            aqwCallSlowCount = 0;
+        }
+    }
+
+""";
         const string fitFunctionMarker = "    window.__skuaExt = function (name, args) {";
         if (!bridge.Contains(fitFunctionMarker, StringComparison.Ordinal))
         {
@@ -250,7 +274,29 @@ public static class Program
     }
 
 """;
-        bridge = bridge.Replace(fitFunctionMarker, stageDiagnostic + fitFunctionMarker, StringComparison.Ordinal);
+        bridge = bridge.Replace(
+            fitFunctionMarker,
+            stageDiagnostic + externalCallMonitor + fitFunctionMarker,
+            StringComparison.Ordinal
+        );
+
+        const string externalCallStart = "            case \"call\": {\n                let reply;";
+        const string instrumentedExternalCallStart = "            case \"call\": {\n                const callStartedAt = performance.now();\n                let reply;";
+        if (!bridge.Contains(externalCallStart, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The Ruffle ExternalInterface call handler changed; call diagnostics were not applied.");
+        }
+
+        bridge = bridge.Replace(externalCallStart, instrumentedExternalCallStart, StringComparison.Ordinal);
+
+        const string externalCallEnd = "                send(reply);\n                break;\n            }\n            case \"batch\": {";
+        const string instrumentedExternalCallEnd = "                send(reply);\n                reportAqwExternalCall(msg.f, callStartedAt);\n                break;\n            }\n            case \"batch\": {";
+        if (!bridge.Contains(externalCallEnd, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The Ruffle ExternalInterface response handler changed; call diagnostics were not applied.");
+        }
+
+        bridge = bridge.Replace(externalCallEnd, instrumentedExternalCallEnd, StringComparison.Ordinal);
         bridge = bridge.Replace(
             loadedHandler,
             loadedHandler[..^1] + " setTimeout(startAqwLayoutMonitor, 0); }",
