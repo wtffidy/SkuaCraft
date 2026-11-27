@@ -1,6 +1,6 @@
 @echo off
 setlocal
-title SkuaCraft Build
+title SkuaCraft Build and PlayerHost
 
 set "SCRIPT_DIR=%~dp0"
 set "BUILD_SCRIPT=%SCRIPT_DIR%Build.ps1"
@@ -24,7 +24,7 @@ set "BUILD_EXIT=%ERRORLEVEL%"
 
 echo.
 if "%BUILD_EXIT%"=="0" (
-    echo [SUCCESS] SkuaCraft build completed.
+    echo [SUCCESS] SkuaCraft mod and PlayerHost build completed.
 ) else (
     echo [FAILED] Build exited with code %BUILD_EXIT%.
 )

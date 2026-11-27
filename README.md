@@ -52,7 +52,7 @@ Versioned GitHub Releases contain both installable pieces: the Minecraft mod JAR
 
 1. Download `SkuaCraft-<version>.jar` and `SkuaCraft-PlayerHost-win-x64-<version>.zip` from the [SkuaCraft Releases page](https://github.com/wtffidy/SkuaCraft/releases).
 2. Install the mod JAR and its required Rinku 3.0.4 library in the Project Infinity instance.
-3. Extract the PlayerHost ZIP anywhere, then run `Install-PlayerHost.ps1`. It opens a folder picker for your Minecraft instance and installs the host into `config/skuacraft/player-host/`. You can also pass `-InstancePath "C:\path\to\instance"` to skip the picker.
+3. Extract the PlayerHost ZIP anywhere, run `Install-PlayerHost.ps1`, and paste the Minecraft instance folder path when prompted. It installs the host into `config/skuacraft/player-host/`. You can also pass `-InstancePath "C:\path\to\instance"` to skip the prompt.
 4. Launch Minecraft, equip the Skua Console and right-click it.
 
 The PlayerHost ZIP includes the installer, executable and runtime files. Rinku 3.0.4 remains a separate required Minecraft mod/library and is not bundled into the SkuaCraft JAR.
@@ -70,20 +70,13 @@ git clone --recurse-submodules https://github.com/wtffidy/SkuaCraft.git
 cd SkuaCraft
 ~~~
 
-Minecraft mod requirements: JDK 17. On Windows, run `Build.bat`; it searches common JDK 17 install locations and existing Gradle 8.8 installations. If JDK 17 is missing, it downloads a SHA-256-verified Eclipse Temurin JDK 17 into the local SkuaCraft tools folder without changing your system Java. It also downloads the official Gradle 8.8 distribution (with SHA-256 verification) when needed.
+Requirements: JDK 17, .NET 10 SDK, and Windows x64. Run `Build.bat`; it builds both the Minecraft mod and self-contained Windows PlayerHost. It searches common JDK 17 install locations and existing Gradle 8.8 installations. If JDK 17 or Gradle 8.8 is missing, it downloads the verified distributions into the local SkuaCraft tools folder without changing your system Java.
 
 ~~~bat
 Build.bat
 ~~~
 
-Player-host requirements: .NET 10 SDK and Windows x64.
-
-~~~powershell
-git submodule update --init --recursive
-./player-host/Publish-PlayerHost.ps1
-~~~
-
-The mod build copies the install-ready JAR into the repository's `build/` folder. The script publishes a self-contained player host to player-host/publish/win-x64/.
+The mod JAR is copied into the repository's `build/` folder, and PlayerHost is published to `player-host/publish/win-x64/`. At the end, the build asks whether to copy the JAR elsewhere. Answer `Y` and paste the destination folder path (usually your instance's `mods` folder). It then asks whether to install PlayerHost. Answer `Y` and paste the Minecraft instance root path (the folder containing `mods` and/or `config`). PlayerHost is copied automatically into `config/skuacraft/player-host/`. No folder picker is used.
 
 ## 🔐 Local runtime safety
 

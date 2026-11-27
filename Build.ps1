@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
-    [switch]$SkipFolderPicker
+    [Alias("SkipFolderPicker")]
+    [switch]$SkipPrompts
 )
 
 $ErrorActionPreference = "Stop"
@@ -380,35 +381,91 @@ foreach ($Artifact in $Artifacts) {
 Write-Host "Ready-to-install JAR:"
 Get-ChildItem $DistributionDirectory -Filter "*.jar" -File |
     ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Green }
-if (-not $SkipFolderPicker) {
+# Publish the companion .NET host as part of the normal build.
+$PlayerHostPublishScript = Join-Path $ProjectRoot "player-host\Publish-PlayerHost.ps1"
+$PlayerHostPublishDirectory = Join-Path $ProjectRoot "player-host\publish\win-x64"
+$PlayerHostExecutable = Join-Path $PlayerHostPublishDirectory "SkuaCraft.PlayerHost.exe"
+
+if (-not (Test-Path -LiteralPath $PlayerHostPublishScript -PathType Leaf)) {
+    throw "PlayerHost publish script was not found: $PlayerHostPublishScript"
+}
+
+if (-not (Get-Command dotnet.exe -ErrorAction SilentlyContinue) -and
+    -not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
+    throw ".NET 10 SDK is required to build PlayerHost. Install it from https://dotnet.microsoft.com/download/dotnet/10.0 and rerun Build.bat."
+}
+
+Write-Host ""
+Write-Host "[SKUA] Publishing Windows x64 PlayerHost..." -ForegroundColor Cyan
+& $PlayerHostPublishScript -Configuration "Release" -Runtime "win-x64"
+if ($LASTEXITCODE -ne 0) {
+    throw "PlayerHost publish failed with exit code $LASTEXITCODE."
+}
+
+if (-not (Test-Path -LiteralPath $PlayerHostExecutable -PathType Leaf)) {
+    throw "PlayerHost publish completed without creating: $PlayerHostExecutable"
+}
+
+Write-Host "[SUCCESS] PlayerHost published: $PlayerHostExecutable" -ForegroundColor Green
+
+if (-not $SkipPrompts) {
     Write-Host ""
-    $SelectFolder = Read-Host "Select another folder for the built JAR? (Y/N)"
+    $CopyJar = Read-Host "Copy the built SkuaCraft JAR to another folder? (Y/N)"
 
-    if ($SelectFolder -match '^(?i)y(es)?$') {
-        $FolderDialog = $null
+    if ($CopyJar -match '^(?i)y(es)?$') {
+        $JarDestination = Read-Host "Paste the destination folder path (for example, your Minecraft instance's mods folder)"
+        $JarDestination = [Environment]::ExpandEnvironmentVariables($JarDestination.Trim().Trim('"').Trim("'"))
 
-        try {
-            Add-Type -AssemblyName System.Windows.Forms
-            $FolderDialog = [System.Windows.Forms.FolderBrowserDialog]::new()
-            $FolderDialog.Description = "Choose where to copy the SkuaCraft JAR"
-            $FolderDialog.ShowNewFolderButton = $true
-
-            if ($FolderDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK -and
-                -not [string]::IsNullOrWhiteSpace($FolderDialog.SelectedPath)) {
-                foreach ($Artifact in @(Get-ChildItem $DistributionDirectory -Filter "*.jar" -File)) {
-                    $SelectedDestination = Join-Path $FolderDialog.SelectedPath $Artifact.Name
-                    Copy-Item -LiteralPath $Artifact.FullName -Destination $SelectedDestination -Force
-                    Write-Host "[OK] Copied to: $SelectedDestination" -ForegroundColor Green
-                }
-            }
-            else {
-                Write-Host "[INFO] Folder selection cancelled. JAR remains in the build folder." -ForegroundColor Yellow
-            }
+        if ([string]::IsNullOrWhiteSpace($JarDestination)) {
+            throw "No JAR destination folder was provided."
         }
-        finally {
-            if ($null -ne $FolderDialog) {
-                $FolderDialog.Dispose()
-            }
+
+        $JarDestination = [IO.Path]::GetFullPath($JarDestination)
+        if (-not (Test-Path -LiteralPath $JarDestination -PathType Container)) {
+            throw "JAR destination folder does not exist: $JarDestination"
+        }
+
+        foreach ($Artifact in @(Get-ChildItem $DistributionDirectory -Filter "*.jar" -File)) {
+            $SelectedDestination = Join-Path $JarDestination $Artifact.Name
+            Copy-Item -LiteralPath $Artifact.FullName -Destination $SelectedDestination -Force
+            Write-Host "[OK] Copied JAR to: $SelectedDestination" -ForegroundColor Green
         }
     }
+
+    Write-Host ""
+    $InstallPlayerHost = Read-Host "Install the PlayerHost into a Minecraft instance now? (Y/N)"
+
+    if ($InstallPlayerHost -match '^(?i)y(es)?$') {
+        $InstancePath = Read-Host "Paste the Minecraft instance folder path (the folder containing mods and/or config)"
+        $InstancePath = [Environment]::ExpandEnvironmentVariables($InstancePath.Trim().Trim('"').Trim("'"))
+
+        if ([string]::IsNullOrWhiteSpace($InstancePath)) {
+            throw "No Minecraft instance folder was provided."
+        }
+
+        $InstancePath = [IO.Path]::GetFullPath($InstancePath)
+        if (-not (Test-Path -LiteralPath $InstancePath -PathType Container)) {
+            throw "Minecraft instance folder does not exist: $InstancePath"
+        }
+
+        if (-not (Test-Path (Join-Path $InstancePath "mods")) -and
+            -not (Test-Path (Join-Path $InstancePath "config"))) {
+            throw "The selected folder does not look like a Minecraft instance (mods/config folder not found): $InstancePath"
+        }
+
+        $HostDestination = Join-Path $InstancePath "config\skuacraft\player-host"
+        New-Item -ItemType Directory -Path $HostDestination -Force | Out-Null
+        Copy-Item -Path (Join-Path $PlayerHostPublishDirectory "*") -Destination $HostDestination -Recurse -Force
+
+        if (-not (Test-Path -LiteralPath (Join-Path $HostDestination "SkuaCraft.PlayerHost.exe") -PathType Leaf)) {
+            throw "PlayerHost installation did not produce the expected executable in: $HostDestination"
+        }
+
+        Write-Host "[SUCCESS] PlayerHost installed: $HostDestination" -ForegroundColor Green
+    }
 }
+
+Write-Host ""
+Write-Host "[SUCCESS] SkuaCraft and PlayerHost build completed." -ForegroundColor Green
+Write-Host "Mod JAR output: $DistributionDirectory"
+Write-Host "PlayerHost output: $PlayerHostPublishDirectory"
