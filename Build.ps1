@@ -27,6 +27,37 @@ function Add-UniquePath {
     }
 }
 
+function Get-LastUsedDirectory {
+    param([string]$SettingName)
+
+    $SettingsDirectory = Join-Path $env:LOCALAPPDATA "SkuaCraft"
+    $SettingsFile = Join-Path $SettingsDirectory "$SettingName.txt"
+    if (-not (Test-Path -LiteralPath $SettingsFile -PathType Leaf)) {
+        return $null
+    }
+
+    $SavedPath = (Get-Content -LiteralPath $SettingsFile -Raw -ErrorAction SilentlyContinue).Trim()
+    if ([string]::IsNullOrWhiteSpace($SavedPath) -or -not (Test-Path -LiteralPath $SavedPath -PathType Container)) {
+        return $null
+    }
+
+    return [IO.Path]::GetFullPath($SavedPath)
+}
+
+function Save-LastUsedDirectory {
+    param([string]$SettingName, [string]$Path)
+
+    try {
+        $SettingsDirectory = Join-Path $env:LOCALAPPDATA "SkuaCraft"
+        New-Item -ItemType Directory -Path $SettingsDirectory -Force | Out-Null
+        $SettingsFile = Join-Path $SettingsDirectory "$SettingName.txt"
+        [IO.File]::WriteAllText($SettingsFile, $Path)
+    }
+    catch {
+        Write-Warning "Could not save the last-used folder: $($_.Exception.Message)"
+    }
+}
+
 function Get-Java17Home {
     $Candidates = [System.Collections.Generic.List[string]]::new()
 
@@ -475,7 +506,16 @@ if (-not $SkipPrompts) {
     $CopyJar = Read-Host "Copy the built SkuaCraft JAR to another folder? (Y/N)"
 
     if ($CopyJar -match '^(?i)y(es)?$') {
-        $JarDestination = Read-Host "Paste the destination folder path (for example, your Minecraft instance's mods folder)"
+        $LastJarDestination = Get-LastUsedDirectory "last-jar-destination"
+        if ([string]::IsNullOrWhiteSpace($LastJarDestination)) {
+            $JarDestination = Read-Host "Paste the destination folder path (for example, your Minecraft instance's mods folder)"
+        }
+        else {
+            $JarDestination = Read-Host "Destination folder (press Enter to reuse '$LastJarDestination')"
+            if ([string]::IsNullOrWhiteSpace($JarDestination)) {
+                $JarDestination = $LastJarDestination
+            }
+        }
         $JarDestination = [Environment]::ExpandEnvironmentVariables($JarDestination.Trim().Trim('"').Trim("'"))
 
         if ([string]::IsNullOrWhiteSpace($JarDestination)) {
@@ -492,13 +532,23 @@ if (-not $SkipPrompts) {
             Copy-Item -LiteralPath $Artifact.FullName -Destination $SelectedDestination -Force
             Write-Host "[OK] Copied JAR to: $SelectedDestination" -ForegroundColor Green
         }
+        Save-LastUsedDirectory -SettingName "last-jar-destination" -Path $JarDestination
     }
 
     Write-Host ""
     $InstallPlayerHost = Read-Host "Install the PlayerHost into a Minecraft instance now? (Y/N)"
 
     if ($InstallPlayerHost -match '^(?i)y(es)?$') {
-        $InstancePath = Read-Host "Paste the Minecraft instance folder path (the folder containing mods and/or config)"
+        $LastInstancePath = Get-LastUsedDirectory "last-instance-path"
+        if ([string]::IsNullOrWhiteSpace($LastInstancePath)) {
+            $InstancePath = Read-Host "Paste the Minecraft instance folder path (the folder containing mods and/or config)"
+        }
+        else {
+            $InstancePath = Read-Host "Minecraft instance folder (press Enter to reuse '$LastInstancePath')"
+            if ([string]::IsNullOrWhiteSpace($InstancePath)) {
+                $InstancePath = $LastInstancePath
+            }
+        }
         $InstancePath = [Environment]::ExpandEnvironmentVariables($InstancePath.Trim().Trim('"').Trim("'"))
 
         if ([string]::IsNullOrWhiteSpace($InstancePath)) {
@@ -515,7 +565,7 @@ if (-not $SkipPrompts) {
             throw "The selected folder does not look like a Minecraft instance (mods/config folder not found): $InstancePath"
         }
 
-                $HostDestination = Join-Path $InstancePath "config\skuacraft\player-host"
+        $HostDestination = Join-Path $InstancePath "config\skuacraft\player-host"
         New-Item -ItemType Directory -Path $HostDestination -Force | Out-Null
 
         # The executable cannot be replaced while this instance is using it.
@@ -557,6 +607,7 @@ if (-not $SkipPrompts) {
         }
 
         Write-Host "[SUCCESS] PlayerHost installed: $HostDestination" -ForegroundColor Green
+        Save-LastUsedDirectory -SettingName "last-instance-path" -Path $InstancePath
     }
 }
 
