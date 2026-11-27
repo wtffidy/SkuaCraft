@@ -259,7 +259,7 @@ public static class Program
         gameFitTimer = setInterval(fitLoadedGameToStage, 500);
     }
 
-"""
+""";
 
         bridge = bridge.Replace(fitFunctionMarker, fitFunction + fitFunctionMarker, StringComparison.Ordinal);
         bridge = bridge.Replace(
