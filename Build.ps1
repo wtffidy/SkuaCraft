@@ -67,7 +67,8 @@ function Get-Java17Home {
         (Join-Path $env:ProgramFiles "Semeru"),
         (Join-Path $env:ProgramFiles "OpenJDK"),
         (Join-Path $env:LOCALAPPDATA "Programs\Eclipse Adoptium"),
-        (Join-Path $env:LOCALAPPDATA "Programs\Microsoft")
+        (Join-Path $env:LOCALAPPDATA "Programs\Microsoft"),
+        (Join-Path $env:LOCALAPPDATA "SkuaCraft\tools")
     )
 
     foreach ($SearchRoot in $SearchRoots) {
