@@ -1,3 +1,8 @@
+[CmdletBinding()]
+param(
+    [string]$Version
+)
+
 $ErrorActionPreference = "Stop"
 
 $ProjectRoot = Split-Path -Parent $PSScriptRoot
@@ -33,13 +38,21 @@ function Get-InnoSetupCompiler {
     return $null
 }
 
-$GradleText = Get-Content -LiteralPath $GradleFile -Raw
-$VersionMatch = [regex]::Match($GradleText, "(?m)^version\s*=\s*'([^']+)'")
-if (-not $VersionMatch.Success) {
-    throw "Could not read the project version from build.gradle."
+if ([string]::IsNullOrWhiteSpace($Version)) {
+    $GradleText = Get-Content -LiteralPath $GradleFile -Raw
+    $VersionMatch = [regex]::Match($GradleText, "getOrElse\('([^']+)'\)")
+    if (-not $VersionMatch.Success) {
+        throw "Could not read the default project version from build.gradle."
+    }
+
+    $Version = $VersionMatch.Groups[1].Value
 }
 
-$Version = $VersionMatch.Groups[1].Value
+$Version = $Version.Trim()
+if ($Version -notmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(alpha|beta)\.[1-9]\d*)?$') {
+    throw "Invalid installer version '$Version'. Use semantic versioning such as 0.1.0-alpha.3, 0.1.0-beta.1 or 1.0.0."
+}
+
 $ModJars = @(Get-ChildItem -LiteralPath $ModOutputDirectory -Filter "*.jar" -File | Where-Object { $_.Name -notmatch '(-sources|-javadoc)\.jar$' })
 if ($ModJars.Count -ne 1) {
     throw "Expected exactly one installable SkuaCraft JAR, found $($ModJars.Count)."
