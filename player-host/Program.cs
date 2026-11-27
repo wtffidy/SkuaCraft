@@ -203,13 +203,19 @@ public static class Program
             if (Math.abs(currentScaleY - targetScaleY) > 0.001)
                 game.callExternalInterface("setGameObject", "scaleY", targetScaleY);
 
-            const signature = [baseWidth, baseHeight, stageWidth, stageHeight, fitScale].map(value => value.toFixed(2)).join("|");
+            const actualScaleX = readAqwNumber(game, "scaleX");
+            const actualScaleY = readAqwNumber(game, "scaleY");
+            const actualWidth = readAqwNumber(game, "width");
+            const actualHeight = readAqwNumber(game, "height");
+            const signature = [baseWidth, baseHeight, stageWidth, stageHeight, fitScale, actualWidth, actualHeight]
+                .map(value => value.toFixed(2)).join("|");
             if (signature !== lastAqwFit) {
                 lastAqwFit = signature;
                 log("AQW root fit: source " + baseWidth.toFixed(1) + "x" + baseHeight.toFixed(1)
                     + ", stage " + stageWidth + "x" + stageHeight
-                    + ", scale " + fitScale.toFixed(5)
-                    + ", expected " + (baseWidth * fitScale).toFixed(1) + "x" + (baseHeight * fitScale).toFixed(1));
+                    + ", target scale " + fitScale.toFixed(5)
+                    + ", actual scale " + actualScaleX.toFixed(5) + "," + actualScaleY.toFixed(5)
+                    + ", actual root " + actualWidth.toFixed(1) + "x" + actualHeight.toFixed(1));
             }
         } catch (error) {
             log("AQW root fit failed: " + error);
@@ -238,7 +244,7 @@ public static class Program
         bridge = bridge.Replace(scaleOption, scalePatch, StringComparison.Ordinal);
         resourceCache["web/bridge.js"] = Encoding.UTF8.GetBytes(bridge);
 
-        Console.WriteLine("[Ruffle] Using native SHOW_ALL stage scaling and enabled AQW stage diagnostics.");
+        Console.WriteLine("[Ruffle] Using SHOW_ALL and automatic AQW root fitting.");
     }
 
     private static void ConfigureServices(IServiceCollection services)
