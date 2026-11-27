@@ -91,7 +91,7 @@ The mod JAR is copied into the repository's `build/` folder, and PlayerHost is p
 | [wtffidy/VibeSkua](https://github.com/wtffidy/VibeSkua) | Current client behaviour and API reference |
 | [Arglax/MVS v1.0.6](https://github.com/Arglax/MVS/tree/v1.0.6) | Pinned Ruffle player host and portable Skua Core runtime |
 | [Rinku](https://github.com/Keksuccino/Rinku) | Chromium browser surface for Minecraft |
-| [Scripts-for-bullshit / Skua](https://github.com/wtffidy/Scripts-for-bullshit/tree/Skua) | Script metadata and category reference only |
+| [auqw/Scripts (Skua)](https://github.com/auqw/Scripts/tree/Skua) | Official upstream script catalogue, metadata, source files and update feed |
 
 The scripts repository is reference material. SkuaCraft does not generate, author or modify AQW scripts.
 
