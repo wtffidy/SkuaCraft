@@ -3,6 +3,7 @@ name: Release SkuaCraft
 on:
   push:
     tags: [ 'v*' ]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -39,15 +40,31 @@ jobs:
       - name: Package release assets
         shell: pwsh
         run: |
-          $tagVersion = $env:GITHUB_REF_NAME.Substring(1)
           $gradleText = Get-Content ./build.gradle -Raw
           $versionMatch = [regex]::Match($gradleText, "(?m)^version\s*=\s*'([^']+)'")
           if (-not $versionMatch.Success) {
             throw "Could not read the project version from build.gradle."
           }
-          if ($versionMatch.Groups[1].Value -ne $tagVersion) {
-            throw "Release tag $tagVersion does not match build.gradle version $($versionMatch.Groups[1].Value)."
+
+          $projectVersion = $versionMatch.Groups[1].Value
+          if ($env:GITHUB_EVENT_NAME -eq "workflow_dispatch") {
+            $tagVersion = $projectVersion
+            $tag = "v$tagVersion"
           }
+          else {
+            $tag = $env:GITHUB_REF_NAME
+            if (-not $tag.StartsWith("v", [StringComparison]::OrdinalIgnoreCase)) {
+              throw "Release tags must start with 'v'. Received: $tag"
+            }
+            $tagVersion = $tag.Substring(1)
+          }
+
+          if ($projectVersion -ne $tagVersion) {
+            throw "Release tag $tagVersion does not match build.gradle version $projectVersion."
+          }
+
+          "RELEASE_TAG=$tag" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          "RELEASE_VERSION=$tagVersion" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
 
           $modJars = @(Get-ChildItem ./build/libs -Filter "*.jar" -File | Where-Object { $_.Name -notmatch '(-sources|-javadoc)\.jar$' })
           if ($modJars.Count -ne 1) {
@@ -68,13 +85,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = $env:GITHUB_REF_NAME
-          $version = $tag.Substring(1)
+          $tag = $env:RELEASE_TAG
+          $version = $env:RELEASE_VERSION
           $assets = @(
             "./release/SkuaCraft-$version.jar",
             "./release/SkuaCraft-PlayerHost-win-x64-$version.zip"
           )
-          $arguments = @("release", "create", $tag) + $assets + @("--title", "SkuaCraft $version", "--generate-notes", "--verify-tag")
+          $arguments = @("release", "create", $tag) + $assets + @("--title", "SkuaCraft $version", "--generate-notes", "--target", $env:GITHUB_SHA)
           if ($version -match '(?i)(alpha|beta|rc|preview|pre)') {
             $arguments += "--prerelease"
           }
