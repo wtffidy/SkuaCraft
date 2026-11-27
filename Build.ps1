@@ -310,214 +310,7 @@ if ($GitRoot -ine [IO.Path]::GetFullPath($ProjectRoot)) {
 }
 
 $OriginUrl = (& git -C $ProjectRoot remote get-url origin 2>&1 | Out-String).Trim()
-if ($LASTEXITCODE -ne 0 -or $OriginUrl -notmatch '(?i)github\.com[:/]wtffidy/SkuaCraft(?:\.git)?
-Write-Host "==============================================" -ForegroundColor DarkCyan
-Write-Host "Project: $ProjectRoot"
-Write-Host "Target:  Minecraft 1.20.1 / Forge 47.4.28"
-Write-Host ""
-
-$JavaHome = Get-Java17Home
-if (-not $JavaHome) {
-    $JavaHome = Install-Java17
-}
-
-$env:JAVA_HOME = $JavaHome
-$env:PATH = (Join-Path $JavaHome "bin") + [IO.Path]::PathSeparator + $env:PATH
-
-$JavaVersionStartInfo = [System.Diagnostics.ProcessStartInfo]::new()
-$JavaVersionStartInfo.FileName = Join-Path $JavaHome "bin\java.exe"
-$JavaVersionStartInfo.Arguments = "-version"
-$JavaVersionStartInfo.UseShellExecute = $false
-$JavaVersionStartInfo.CreateNoWindow = $true
-$JavaVersionStartInfo.RedirectStandardOutput = $true
-$JavaVersionStartInfo.RedirectStandardError = $true
-$JavaVersionProcess = [System.Diagnostics.Process]::new()
-$JavaVersionProcess.StartInfo = $JavaVersionStartInfo
-
-try {
-    [void]$JavaVersionProcess.Start()
-    $JavaVersionStdOut = $JavaVersionProcess.StandardOutput.ReadToEnd()
-    $JavaVersionStdErr = $JavaVersionProcess.StandardError.ReadToEnd()
-    $JavaVersionProcess.WaitForExit()
-    $JavaVersion = ($JavaVersionStdOut + $JavaVersionStdErr).Trim() -split "\r?\n" | Select-Object -First 1
-}
-finally {
-    $JavaVersionProcess.Dispose()
-}
-
-Write-Host "[OK] Java:   $JavaHome" -ForegroundColor Green
-Write-Host "     $JavaVersion"
-
-$GradlePath = Get-Gradle88
-if (-not $GradlePath) {
-    $GradlePath = Install-Gradle88
-}
-
-Write-Host "[OK] Gradle: $GradlePath" -ForegroundColor Green
-Write-Host ""
-Write-Host "[SKUA] Running Gradle build..." -ForegroundColor Cyan
-
-Push-Location $ProjectRoot
-try {
-    & $GradlePath build --no-daemon
-    $BuildExitCode = $LASTEXITCODE
-}
-finally {
-    Pop-Location
-}
-
-if ($BuildExitCode -ne 0) {
-    throw "Gradle build failed with exit code $BuildExitCode."
-}
-
-$Artifacts = @(Get-ChildItem (Join-Path $ProjectRoot "build\libs") -Filter "*.jar" -File -ErrorAction SilentlyContinue)
-if ($Artifacts.Count -eq 0) {
-    throw "Gradle completed, but no mod JAR was found in build\libs."
-}
-
-$DistributionDirectory = Join-Path $ProjectRoot "build"
-New-Item -ItemType Directory -Path $DistributionDirectory -Force | Out-Null
-
-# Remove old copied JARs so the build folder always represents the latest successful build.
-Get-ChildItem $DistributionDirectory -Filter "*.jar" -File -ErrorAction SilentlyContinue |
-    Remove-Item -Force
-
-foreach ($Artifact in $Artifacts) {
-    $Destination = Join-Path $DistributionDirectory $Artifact.Name
-    Copy-Item -LiteralPath $Artifact.FullName -Destination $Destination -Force
-}
-
-Write-Host ""
-Write-Host "[SUCCESS] SkuaCraft build completed." -ForegroundColor Green
-Write-Host "Build output:"
-foreach ($Artifact in $Artifacts) {
-    Write-Host "  $($Artifact.FullName)" -ForegroundColor DarkGray
-}
-Write-Host "Ready-to-install JAR:"
-Get-ChildItem $DistributionDirectory -Filter "*.jar" -File |
-    ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Green }
-# Publish the companion .NET host as part of the normal build.
-$PlayerHostPublishScript = Join-Path $ProjectRoot "player-host\Publish-PlayerHost.ps1"
-$PlayerHostPublishDirectory = Join-Path $ProjectRoot "player-host\publish\win-x64"
-$PlayerHostExecutable = Join-Path $PlayerHostPublishDirectory "SkuaCraft.PlayerHost.exe"
-
-if (-not (Test-Path -LiteralPath $PlayerHostPublishScript -PathType Leaf)) {
-    throw "PlayerHost publish script was not found: $PlayerHostPublishScript"
-}
-
-if (-not (Get-Command dotnet.exe -ErrorAction SilentlyContinue) -and
-    -not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
-    throw ".NET 10 SDK is required to build PlayerHost. Install it from https://dotnet.microsoft.com/download/dotnet/10.0 and rerun Build.bat."
-}
-
-Write-Host ""
-Write-Host "[SKUA] Publishing Windows x64 PlayerHost..." -ForegroundColor Cyan
-& $PlayerHostPublishScript -Configuration "Release" -Runtime "win-x64"
-if ($LASTEXITCODE -ne 0) {
-    throw "PlayerHost publish failed with exit code $LASTEXITCODE."
-}
-
-if (-not (Test-Path -LiteralPath $PlayerHostExecutable -PathType Leaf)) {
-    throw "PlayerHost publish completed without creating: $PlayerHostExecutable"
-}
-
-Write-Host "[SUCCESS] PlayerHost published: $PlayerHostExecutable" -ForegroundColor Green
-
-if (-not $SkipPrompts) {
-    Write-Host ""
-    $CopyJar = Read-Host "Copy the built SkuaCraft JAR to another folder? (Y/N)"
-
-    if ($CopyJar -match '^(?i)y(es)?$') {
-        $JarDestination = Read-Host "Paste the destination folder path (for example, your Minecraft instance's mods folder)"
-        $JarDestination = [Environment]::ExpandEnvironmentVariables($JarDestination.Trim().Trim('"').Trim("'"))
-
-        if ([string]::IsNullOrWhiteSpace($JarDestination)) {
-            throw "No JAR destination folder was provided."
-        }
-
-        $JarDestination = [IO.Path]::GetFullPath($JarDestination)
-        if (-not (Test-Path -LiteralPath $JarDestination -PathType Container)) {
-            throw "JAR destination folder does not exist: $JarDestination"
-        }
-
-        foreach ($Artifact in @(Get-ChildItem $DistributionDirectory -Filter "*.jar" -File)) {
-            $SelectedDestination = Join-Path $JarDestination $Artifact.Name
-            Copy-Item -LiteralPath $Artifact.FullName -Destination $SelectedDestination -Force
-            Write-Host "[OK] Copied JAR to: $SelectedDestination" -ForegroundColor Green
-        }
-    }
-
-    Write-Host ""
-    $InstallPlayerHost = Read-Host "Install the PlayerHost into a Minecraft instance now? (Y/N)"
-
-    if ($InstallPlayerHost -match '^(?i)y(es)?$') {
-        $InstancePath = Read-Host "Paste the Minecraft instance folder path (the folder containing mods and/or config)"
-        $InstancePath = [Environment]::ExpandEnvironmentVariables($InstancePath.Trim().Trim('"').Trim("'"))
-
-        if ([string]::IsNullOrWhiteSpace($InstancePath)) {
-            throw "No Minecraft instance folder was provided."
-        }
-
-        $InstancePath = [IO.Path]::GetFullPath($InstancePath)
-        if (-not (Test-Path -LiteralPath $InstancePath -PathType Container)) {
-            throw "Minecraft instance folder does not exist: $InstancePath"
-        }
-
-        if (-not (Test-Path (Join-Path $InstancePath "mods")) -and
-            -not (Test-Path (Join-Path $InstancePath "config"))) {
-            throw "The selected folder does not look like a Minecraft instance (mods/config folder not found): $InstancePath"
-        }
-
-                $HostDestination = Join-Path $InstancePath "config\skuacraft\player-host"
-        New-Item -ItemType Directory -Path $HostDestination -Force | Out-Null
-
-        # The executable cannot be replaced while this instance is using it.
-        $InstalledHostExecutable = Join-Path $HostDestination "SkuaCraft.PlayerHost.exe"
-        while ($true) {
-            $RunningHost = @(Get-Process -Name "SkuaCraft.PlayerHost" -ErrorAction SilentlyContinue |
-                Where-Object {
-                    try {
-                        $_.Path -and [IO.Path]::GetFullPath($_.Path) -ieq [IO.Path]::GetFullPath($InstalledHostExecutable)
-                    }
-                    catch {
-                        $false
-                    }
-                })
-
-            if ($RunningHost.Count -eq 0) {
-                break
-            }
-
-            Write-Host ""
-            Write-Host "[WAIT] SkuaCraft.PlayerHost is still running for this Minecraft instance." -ForegroundColor Yellow
-            Write-Host "Close Minecraft completely, then press Enter to retry. Type N to cancel."
-            $RetryInstall = Read-Host "Retry installation"
-
-            if ($RetryInstall -match '^[Nn](o)?$') {
-                throw "PlayerHost installation cancelled because the existing PlayerHost is still running."
-            }
-        }
-
-        try {
-            Copy-Item -Path (Join-Path $PlayerHostPublishDirectory "*") -Destination $HostDestination -Recurse -Force -ErrorAction Stop
-        }
-        catch {
-            throw "Could not install PlayerHost to '$HostDestination'. Make sure Minecraft and SkuaCraft.PlayerHost are closed, then rerun Build.ps1. Details: $($_.Exception.Message)"
-        }
-
-        if (-not (Test-Path -LiteralPath $InstalledHostExecutable -PathType Leaf)) {
-            throw "PlayerHost installation did not produce the expected executable in: $HostDestination"
-        }
-
-        Write-Host "[SUCCESS] PlayerHost installed: $HostDestination" -ForegroundColor Green
-    }
-}
-
-Write-Host ""
-Write-Host "[SUCCESS] SkuaCraft and PlayerHost build completed." -ForegroundColor Green
-Write-Host "Mod JAR output: $DistributionDirectory"
-Write-Host "PlayerHost output: $PlayerHostPublishDirectory"
-) {
+if ($LASTEXITCODE -ne 0 -or $OriginUrl -notmatch '(?i)github\.com[:/]wtffidy/SkuaCraft(?:\.git)?$') {
     throw "The origin remote must point to https://github.com/wtffidy/SkuaCraft. Current origin: '$OriginUrl'."
 }
 
@@ -714,11 +507,44 @@ if (-not $SkipPrompts) {
             throw "The selected folder does not look like a Minecraft instance (mods/config folder not found): $InstancePath"
         }
 
-        $HostDestination = Join-Path $InstancePath "config\skuacraft\player-host"
+                $HostDestination = Join-Path $InstancePath "config\skuacraft\player-host"
         New-Item -ItemType Directory -Path $HostDestination -Force | Out-Null
-        Copy-Item -Path (Join-Path $PlayerHostPublishDirectory "*") -Destination $HostDestination -Recurse -Force
 
-        if (-not (Test-Path -LiteralPath (Join-Path $HostDestination "SkuaCraft.PlayerHost.exe") -PathType Leaf)) {
+        # The executable cannot be replaced while this instance is using it.
+        $InstalledHostExecutable = Join-Path $HostDestination "SkuaCraft.PlayerHost.exe"
+        while ($true) {
+            $RunningHost = @(Get-Process -Name "SkuaCraft.PlayerHost" -ErrorAction SilentlyContinue |
+                Where-Object {
+                    try {
+                        $_.Path -and [IO.Path]::GetFullPath($_.Path) -ieq [IO.Path]::GetFullPath($InstalledHostExecutable)
+                    }
+                    catch {
+                        $false
+                    }
+                })
+
+            if ($RunningHost.Count -eq 0) {
+                break
+            }
+
+            Write-Host ""
+            Write-Host "[WAIT] SkuaCraft.PlayerHost is still running for this Minecraft instance." -ForegroundColor Yellow
+            Write-Host "Close Minecraft completely, then press Enter to retry. Type N to cancel."
+            $RetryInstall = Read-Host "Retry installation"
+
+            if ($RetryInstall -match '^[Nn](o)?$') {
+                throw "PlayerHost installation cancelled because the existing PlayerHost is still running."
+            }
+        }
+
+        try {
+            Copy-Item -Path (Join-Path $PlayerHostPublishDirectory "*") -Destination $HostDestination -Recurse -Force -ErrorAction Stop
+        }
+        catch {
+            throw "Could not install PlayerHost to '$HostDestination'. Make sure Minecraft and SkuaCraft.PlayerHost are closed, then rerun Build.ps1. Details: $($_.Exception.Message)"
+        }
+
+        if (-not (Test-Path -LiteralPath $InstalledHostExecutable -PathType Leaf)) {
             throw "PlayerHost installation did not produce the expected executable in: $HostDestination"
         }
 
