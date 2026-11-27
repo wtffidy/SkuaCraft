@@ -134,11 +134,79 @@ public static class Program
 
         using StreamReader reader = new(bridgeStream);
         string bridge = reader.ReadToEnd();
+
         const string scaleOption = "            scale: \"showAll\",";
         if (!bridge.Contains(scaleOption, StringComparison.Ordinal))
         {
             throw new InvalidOperationException("The Ruffle scaling configuration changed; the responsive scaling patch was not applied.");
         }
+
+        const string loadedHandler = "        if (name === \"loaded\") { setStatus(\"\"); setTimeout(applyQuality, 0); setTimeout(applyTouchUi, 0); setTimeout(defaultCrowd, 0); setTimeout(defaultUntargetSelf, 0); }";
+        if (!bridge.Contains(loadedHandler, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The Skua game-loaded callback changed; the AQW stage-fit patch was not applied.");
+        }
+
+        const string fitFunctionMarker = "    window.__skuaExt = function (name, args) {";
+        if (!bridge.Contains(fitFunctionMarker, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The Skua ExternalInterface bridge changed; the AQW stage-fit patch was not applied.");
+        }
+
+        const string fitFunction = """
+    function fitLoadedGameToStage() {
+        if (!player || !player.ruffle) return;
+
+        try {
+            const game = player.ruffle();
+            const readNumber = path => {
+                const raw = game.callExternalInterface("getGameObject", path);
+                const value = Number(JSON.parse(raw));
+                return Number.isFinite(value) ? value : 0;
+            };
+
+            // Main.as hosts the live AQW SWF as a child of the 958x550 Skua stage.
+            // Fit that child to the wrapper's stage, not merely to the Chromium canvas.
+            let gameWidth = readNumber("loaderInfo.width");
+            let gameHeight = readNumber("loaderInfo.height");
+            if (gameWidth <= 0 || gameHeight <= 0) {
+                gameWidth = readNumber("width");
+                gameHeight = readNumber("height");
+            }
+
+            if (gameWidth <= 0 || gameHeight <= 0) {
+                log("AQW stage fit skipped: invalid game dimensions " + gameWidth + "x" + gameHeight);
+                return;
+            }
+
+            const stageWidth = 958;
+            const stageHeight = 550;
+            const fitScale = Math.min(stageWidth / gameWidth, stageHeight / gameHeight);
+            const fittedWidth = gameWidth * fitScale;
+            const fittedHeight = gameHeight * fitScale;
+            const offsetX = (stageWidth - fittedWidth) / 2;
+            const offsetY = (stageHeight - fittedHeight) / 2;
+
+            game.callExternalInterface("setGameObject", "scaleX", fitScale);
+            game.callExternalInterface("setGameObject", "scaleY", fitScale);
+            game.callExternalInterface("setGameObject", "x", offsetX);
+            game.callExternalInterface("setGameObject", "y", offsetY);
+
+            log("AQW game SWF fitted to Skua stage: " + gameWidth + "x" + gameHeight
+                + " -> " + fittedWidth.toFixed(1) + "x" + fittedHeight.toFixed(1));
+        } catch (error) {
+            log("AQW stage fit failed: " + error);
+        }
+    }
+
+""";
+
+        bridge = bridge.Replace(fitFunctionMarker, fitFunction + fitFunctionMarker, StringComparison.Ordinal);
+        bridge = bridge.Replace(
+            loadedHandler,
+            loadedHandler[..^1] + " setTimeout(fitLoadedGameToStage, 0); }",
+            StringComparison.Ordinal
+        );
 
         const string scalePatch = scaleOption
             + "\n            forceScale: true,"
@@ -148,7 +216,7 @@ public static class Program
         bridge = bridge.Replace(scaleOption, scalePatch, StringComparison.Ordinal);
         resourceCache["web/bridge.js"] = Encoding.UTF8.GetBytes(bridge);
 
-        Console.WriteLine("[Ruffle] Locked SWF scaling to showAll with centered stage alignment.");
+        Console.WriteLine("[Ruffle] Locked SWF scaling and enabled automatic AQW game-stage fitting.");
     }
 
     private static void ConfigureServices(IServiceCollection services)
