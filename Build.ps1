@@ -293,6 +293,55 @@ function Install-Gradle88 {
     return $GradleBatch
 }
 
+# Always build the latest committed source from the fork's main branch.
+$GitExe = Get-Command git.exe -ErrorAction SilentlyContinue
+if (-not $GitExe) {
+    throw "Git for Windows is required. Install Git, then rerun Build.bat."
+}
+
+$GitRoot = (& git -C $ProjectRoot rev-parse --show-toplevel 2>$null | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($GitRoot)) {
+    throw "This build folder is not a Git checkout. Clone https://github.com/wtffidy/SkuaCraft and run Build.bat from that folder."
+}
+
+$GitRoot = [IO.Path]::GetFullPath($GitRoot)
+if ($GitRoot -ine [IO.Path]::GetFullPath($ProjectRoot)) {
+    throw "Build.ps1 must be run from the SkuaCraft repository root. Git root: $GitRoot"
+}
+
+$CurrentBranch = (& git -C $ProjectRoot branch --show-current 2>&1 | Out-String).Trim()
+if ($LASTEXITCODE -ne 0 -or $CurrentBranch -ne "main") {
+    throw "Builds must run from the main branch. Current branch: '$CurrentBranch'. Switch to main and rerun Build.bat."
+}
+
+$WorkingTree = @(& git -C $ProjectRoot status --porcelain 2>&1)
+if ($LASTEXITCODE -ne 0) {
+    throw "Could not inspect the Git working tree: $($WorkingTree -join [Environment]::NewLine)"
+}
+if ($WorkingTree.Count -gt 0) {
+    throw "Your SkuaCraft working tree has local changes. Commit or stash them before building so the automatic update cannot overwrite your work."
+}
+
+Write-Host "[GIT] Fetching the latest SkuaCraft main..." -ForegroundColor Cyan
+& git -C $ProjectRoot fetch origin main
+if ($LASTEXITCODE -ne 0) {
+    throw "Git fetch failed. Check your connection and the origin remote, then rerun Build.bat."
+}
+
+& git -C $ProjectRoot pull --ff-only origin main
+if ($LASTEXITCODE -ne 0) {
+    throw "Git could not fast-forward main. Resolve the local branch state manually, then rerun Build.bat."
+}
+
+Write-Host "[GIT] Updating pinned submodules..." -ForegroundColor Cyan
+& git -C $ProjectRoot submodule update --init --recursive
+if ($LASTEXITCODE -ne 0) {
+    throw "Git submodule update failed. Check your connection and rerun Build.bat."
+}
+
+$UpdatedCommit = (& git -C $ProjectRoot rev-parse --short HEAD 2>&1 | Out-String).Trim()
+Write-Host "[GIT] Building SkuaCraft commit $UpdatedCommit." -ForegroundColor Green
+
 Write-Host ""
 Write-Host "==============================================" -ForegroundColor DarkCyan
 Write-Host "             SKUA CRAFT BUILD" -ForegroundColor Cyan

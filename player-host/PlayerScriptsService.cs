@@ -12,7 +12,7 @@ namespace SkuaCraft.PlayerHost;
 
 public sealed class PlayerScriptsService : ObservableObject, IGetScriptsService
 {
-    private const string RawRoot = "https://raw.githubusercontent.com/wtffidy/Scripts-for-bullshit/refs/heads/Skua/";
+    private const string RawRoot = "https://raw.githubusercontent.com/auqw/Scripts/refs/heads/Skua/";
     private static readonly HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(90) };
     private readonly ConcurrentDictionary<string, SemaphoreSlim> downloads = new(StringComparer.OrdinalIgnoreCase);
 
@@ -22,7 +22,7 @@ public sealed class PlayerScriptsService : ObservableObject, IGetScriptsService
     {
         using Stream stream = typeof(PlayerScriptsService).Assembly
             .GetManifestResourceStream("SkuaCraft.PlayerHost.ScriptCatalogue.json")
-            ?? throw new FileNotFoundException("The bundled Scripts-for-bullshit catalogue is missing.");
+            ?? throw new FileNotFoundException("The bundled auqw/Scripts catalogue is missing.");
 
         using StreamReader reader = new(stream);
         string json = reader.ReadToEnd();
@@ -59,14 +59,14 @@ public sealed class PlayerScriptsService : ObservableObject, IGetScriptsService
     public ValueTask<List<ScriptInfo>> GetScriptsAsync(IProgress<string>? progress, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        progress?.Report($"Loaded {Scripts.Count:N0} scripts from wtffidy/Scripts-for-bullshit (Skua).");
+        progress?.Report($"Loaded {Scripts.Count:N0} scripts from auqw/Scripts (Skua).");
         return ValueTask.FromResult(ScriptInfo.Snapshot(Scripts));
     }
 
     public Task RefreshScriptsAsync(IProgress<string>? progress, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        progress?.Report("Using the pinned wtffidy/Scripts-for-bullshit (Skua) catalogue.");
+        progress?.Report("Using the pinned auqw/Scripts (Skua) catalogue.");
         return Task.CompletedTask;
     }
 
@@ -86,7 +86,7 @@ public sealed class PlayerScriptsService : ObservableObject, IGetScriptsService
     public Task<int> IncrementalUpdateScriptsAsync(IProgress<string>? progress, CancellationToken token)
     {
         token.ThrowIfCancellationRequested();
-        progress?.Report("The pinned catalogue is read-only. Update SkuaCraft to refresh its snapshot.");
+        progress?.Report("The bundled auqw/Scripts catalogue is read-only. Update SkuaCraft to refresh its snapshot.");
         return Task.FromResult(0);
     }
 
