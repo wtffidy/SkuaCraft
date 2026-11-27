@@ -97,6 +97,11 @@ public static class Program
                 {
                     Console.WriteLine($"[AQW scaling] {message}");
                 }
+                else if (message.StartsWith("AQW ExternalInterface slow call:", StringComparison.Ordinal)
+                    || message.StartsWith("AQW ExternalInterface throughput:", StringComparison.Ordinal))
+                {
+                    Console.WriteLine($"[AQW bridge] {message}");
+                }
             };
 
             // Mirrors MVS's SkuaStartupHandler.LoadGame behaviour. Ruffle requests
