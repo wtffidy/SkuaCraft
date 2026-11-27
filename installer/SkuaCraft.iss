@@ -175,7 +175,7 @@ var
   DriveRoot: string;
 begin
   Result := '';
-  ProfileDirectory := ExpandConstant('{userprofile}');
+  ProfileDirectory := ExpandConstant('{%USERPROFILE}');
 
   // Prefer the standard CurseForge location.
   CandidateDirectory := AddBackslash(ProfileDirectory) + 'curseforge\minecraft\Instances';
