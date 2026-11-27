@@ -248,11 +248,13 @@ procedure InitializeWizard();
 var
   DefaultInstancesDirectory: string;
   DefaultProfileIndex: Integer;
+  ExistingSkuaCraftProfileCount: Integer;
   ProfileIndex: Integer;
   AfterPageID: Integer;
 begin
   ProfileDirectories := TStringList.Create;
   DefaultProfileIndex := -1;
+  ExistingSkuaCraftProfileCount := 0;
   HasProfilePage := False;
   DefaultInstancesDirectory := FindDefaultInstancesDirectory();
 
@@ -271,11 +273,14 @@ begin
     begin
       ProfilePage.Add(ProfileDirectories[ProfileIndex]);
       if DirExists(AddBackslash(ProfileDirectories[ProfileIndex]) + 'config\skuacraft') then
+      begin
+        ExistingSkuaCraftProfileCount := ExistingSkuaCraftProfileCount + 1;
         DefaultProfileIndex := ProfileIndex;
+      end;
     end;
 
-    // Preselect the only profile that already has SkuaCraft installed, if there is one.
-    if DefaultProfileIndex >= 0 then
+    // Preselect only when exactly one profile already has SkuaCraft installed.
+    if (ExistingSkuaCraftProfileCount = 1) and (DefaultProfileIndex >= 0) then
       ProfilePage.Values[DefaultProfileIndex] := True;
 
     HasProfilePage := True;
