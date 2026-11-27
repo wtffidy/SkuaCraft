@@ -1,15 +1,14 @@
-name: Build and Release SkuaCraft
+name: Build SkuaCraft
 
 on:
   push:
     branches: [ main ]
-    tags: [ 'v*' ]
   pull_request:
     branches: [ main ]
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -43,51 +42,3 @@ jobs:
       - name: Smoke test player host
         shell: pwsh
         run: ./player-host/SmokeTest.ps1
-
-      - name: Package release assets
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: pwsh
-        run: |
-          $tagVersion = $env:GITHUB_REF_NAME.Substring(1)
-          $gradleText = Get-Content ./build.gradle -Raw
-          $versionMatch = [regex]::Match($gradleText, "(?m)^version\s*=\s*'([^']+)'")
-          if (-not $versionMatch.Success) {
-            throw "Could not read the project version from build.gradle."
-          }
-          if ($versionMatch.Groups[1].Value -ne $tagVersion) {
-            throw "Release tag $tagVersion does not match build.gradle version $($versionMatch.Groups[1].Value)."
-          }
-
-          $modJars = @(Get-ChildItem ./build/libs -Filter "*.jar" -File | Where-Object { $_.Name -notmatch '(-sources|-javadoc)\.jar$' })
-          if ($modJars.Count -ne 1) {
-            throw "Expected exactly one installable mod JAR, found $($modJars.Count)."
-          }
-
-          New-Item -ItemType Directory -Path ./release -Force | Out-Null
-          Copy-Item $modJars[0].FullName "./release/SkuaCraft-$tagVersion.jar" -Force
-          Compress-Archive -Path ./player-host/publish/win-x64/* -DestinationPath "./release/SkuaCraft-PlayerHost-win-x64-$tagVersion.zip" -CompressionLevel Optimal -Force
-
-          if (-not (Test-Path "./release/SkuaCraft-PlayerHost-win-x64-$tagVersion.zip")) {
-            throw "Player host release archive was not created."
-          }
-
-      - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $tag = $env:GITHUB_REF_NAME
-          $version = $tag.Substring(1)
-          $assets = @(
-            "./release/SkuaCraft-$version.jar",
-            "./release/SkuaCraft-PlayerHost-win-x64-$version.zip"
-          )
-          $arguments = @("release", "create", $tag) + $assets + @("--title", "SkuaCraft $version", "--generate-notes", "--verify-tag")
-          if ($version -match '(?i)(alpha|beta|rc|preview|pre)') {
-            $arguments += "--prerelease"
-          }
-          & gh @arguments
-          if ($LASTEXITCODE -ne 0) {
-            throw "GitHub Release creation failed with exit code $LASTEXITCODE."
-          }
