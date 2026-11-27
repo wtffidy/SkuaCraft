@@ -548,8 +548,41 @@ if ($FastInstall) {
             }
         })
 
+    foreach ($HostProcess in $RunningHost) {
+        $ParentProcess = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $($HostProcess.ParentProcessId)" -ErrorAction SilentlyContinue
+        if ($null -ne $ParentProcess) {
+            throw "Cannot update this instance's PlayerHost while its parent process '$($ParentProcess.Name)' is still running. Close the Minecraft instance using '$InstalledHostExecutable', then rerun FastBuild.bat."
+        }
+
+        $HostProcessId = [int]$HostProcess.ProcessId
+        $StopRequestFile = Join-Path $InstancePath "config\skuacraft\player-stop.request"
+        Write-Host "[FAST BUILD] Found an orphaned PlayerHost (PID $HostProcessId). Requesting a clean shutdown..." -ForegroundColor Yellow
+        New-Item -ItemType File -Path $StopRequestFile -Force | Out-Null
+
+        $StopDeadline = [DateTime]::UtcNow.AddSeconds(5)
+        do {
+            Start-Sleep -Milliseconds 250
+            $RemainingHost = Get-CimInstance -ClassName Win32_Process -Filter "ProcessId = $HostProcessId" -ErrorAction SilentlyContinue
+        } while ($null -ne $RemainingHost -and [DateTime]::UtcNow -lt $StopDeadline)
+
+        if ($null -ne $RemainingHost) {
+            Write-Host "[FAST BUILD] Orphaned PlayerHost did not stop cleanly; terminating PID $HostProcessId." -ForegroundColor Yellow
+            Stop-Process -Id $HostProcessId -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    $RunningHost = @(Get-CimInstance -ClassName Win32_Process -Filter "Name = 'SkuaCraft.PlayerHost.exe'" -ErrorAction SilentlyContinue |
+        Where-Object {
+            try {
+                $_.ExecutablePath -and [IO.Path]::GetFullPath($_.ExecutablePath) -ieq [IO.Path]::GetFullPath($InstalledHostExecutable)
+            }
+            catch {
+                $false
+            }
+        })
+
     if ($RunningHost.Count -gt 0) {
-        throw "Cannot update this instance's PlayerHost while it is running. Close the Minecraft instance using '$InstalledHostExecutable', then rerun FastBuild.bat."
+        throw "Cannot update this instance's PlayerHost because its process is still running: '$InstalledHostExecutable'. Close it and rerun FastBuild.bat."
     }
 
     $InstallJars = @(Get-ChildItem -LiteralPath $DistributionDirectory -Filter "*.jar" -File -ErrorAction SilentlyContinue)
