@@ -89,7 +89,9 @@ public static class Program
                 Console.WriteLine($"[Ruffle] Reusing persistent player origin port {savedRufflePort}.");
             }
 
+            Console.WriteLine("[Startup] Applying the embedded Ruffle bridge patch.");
             ApplyRuffleScalingPatch(playerHost);
+            Console.WriteLine("[Startup] Ruffle bridge patch applied.");
             playerHost.Control.PageLog += message =>
             {
                 if (message.StartsWith("AQW root fit", StringComparison.Ordinal)
@@ -108,8 +110,12 @@ public static class Program
             // the Skua SWF after its page and ExternalInterface bridge are ready.
             bot.Flash.FlashCall += HandleFlashCall;
 
+            Console.WriteLine("[Startup] Initializing the Skua script interface.");
             botManager.Initialize();
+            Console.WriteLine("[Startup] Skua script interface initialized.");
+            Console.WriteLine("[Startup] Starting the Ruffle player host.");
             flash.InitializeFlash();
+            Console.WriteLine("[Startup] Ruffle player host initialized.");
             SaveRufflePort(rufflePortFile, playerHost.Port);
             Console.WriteLine($"[Ruffle] Persistent player origin port is {playerHost.Port}.");
 
