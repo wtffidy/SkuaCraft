@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: skuacraft-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Build mod and Windows player host
