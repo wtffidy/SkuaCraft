@@ -7,6 +7,13 @@ $stop = Join-Path $env:TEMP "skuacraft-ci-stop.request"
 $stdout = Join-Path $env:TEMP "skuacraft-ci-host.stdout.log"
 $stderr = Join-Path $env:TEMP "skuacraft-ci-host.stderr.log"
 
+foreach ($requiredFile in @("AdvancedSkills.json", "QuestData.json")) {
+    $requiredPath = Join-Path $publish $requiredFile
+    if (-not (Test-Path $requiredPath)) {
+        throw "Player host is missing required Skua data file: $requiredPath"
+    }
+}
+
 Remove-Item $session, $stop, $stdout, $stderr -Force -ErrorAction SilentlyContinue
 $arguments = '--session-file "{0}" --stop-file "{1}"' -f $session, $stop
 $process = Start-Process -FilePath $executable -ArgumentList $arguments -PassThru -NoNewWindow -RedirectStandardOutput $stdout -RedirectStandardError $stderr
