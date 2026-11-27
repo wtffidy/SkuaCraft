@@ -43,6 +43,7 @@ public static class Program
             WriteStartupDiagnostic(startupLogFile, "[Startup] ProcessExit event fired.");
 
         using CancellationTokenSource shutdown = new();
+        ServiceProvider? serviceProvider = null;
         Console.CancelKeyPress += (_, eventArgs) =>
         {
             eventArgs.Cancel = true;
@@ -68,46 +69,47 @@ public static class Program
             ConfigureServices(services);
             WriteStartupDiagnostic(startupLogFile, "[Startup] Building dependency injection container.");
 
-            await using ServiceProvider serviceProvider = services.BuildServiceProvider(
+            serviceProvider = services.BuildServiceProvider(
                 new ServiceProviderOptions
                 {
                     ValidateOnBuild = true,
                     ValidateScopes = true
                 }
             );
+            IServiceProvider rootServices = serviceProvider;
 
             WriteStartupDiagnostic(startupLogFile, "[Startup] Dependency injection container built.");
-            Ioc.Default.ConfigureServices(serviceProvider);
+            Ioc.Default.ConfigureServices(rootServices);
             using PlayerScriptDiagnostics scriptDiagnostics = new();
             Console.WriteLine($"[Runtime] PlayerHost is limited to {Environment.ProcessorCount} logical processors.");
 
             WriteStartupDiagnostic(startupLogFile, "[Startup] Initializing Skua client files.");
-            IClientFilesService clientFiles = serviceProvider.GetRequiredService<IClientFilesService>();
+            IClientFilesService clientFiles = rootServices.GetRequiredService<IClientFilesService>();
             clientFiles.CreateDirectories();
             clientFiles.CreateFiles();
             WriteStartupDiagnostic(startupLogFile, "[Startup] Skua client files initialized.");
 
             WriteStartupDiagnostic(startupLogFile, "[Startup] Initializing Skua settings.");
-            ISettingsService settings = serviceProvider.GetRequiredService<ISettingsService>();
+            ISettingsService settings = rootServices.GetRequiredService<ISettingsService>();
             settings.SetApplicationVersion();
             WriteStartupDiagnostic(startupLogFile, "[Startup] Skua settings initialized.");
 
             WriteStartupDiagnostic(startupLogFile, "[Startup] Initializing Skua plugins.");
-            IPluginManager plugins = serviceProvider.GetRequiredService<IPluginManager>();
+            IPluginManager plugins = rootServices.GetRequiredService<IPluginManager>();
             plugins.Initialize();
             WriteStartupDiagnostic(startupLogFile, "[Startup] Skua plugins initialized.");
 
             WriteStartupDiagnostic(startupLogFile, "[Startup] Resolving Skua script interface.");
             IScriptInterface bot = GetRequiredServiceWithFileLockRetry<IScriptInterface>(
-                serviceProvider,
+                rootServices,
                 "Skua script interface"
             );
             WriteStartupDiagnostic(startupLogFile, "[Startup] Resolving Skua managers and Ruffle services.");
-            IScriptInterfaceManager botManager = serviceProvider.GetRequiredService<IScriptInterfaceManager>();
-            IScriptManager scriptManager = serviceProvider.GetRequiredService<IScriptManager>();
-            IGetScriptsService scriptCatalogue = serviceProvider.GetRequiredService<IGetScriptsService>();
-            RuffleFlashUtil flash = serviceProvider.GetRequiredService<RuffleFlashUtil>();
-            RuffleHost playerHost = serviceProvider.GetRequiredService<RuffleHost>();
+            IScriptInterfaceManager botManager = rootServices.GetRequiredService<IScriptInterfaceManager>();
+            IScriptManager scriptManager = rootServices.GetRequiredService<IScriptManager>();
+            IGetScriptsService scriptCatalogue = rootServices.GetRequiredService<IGetScriptsService>();
+            RuffleFlashUtil flash = rootServices.GetRequiredService<RuffleFlashUtil>();
+            RuffleHost playerHost = rootServices.GetRequiredService<RuffleHost>();
             WriteStartupDiagnostic(startupLogFile, "[Startup] Skua managers and Ruffle services resolved.");
             string rufflePortFile = GetRufflePortFilePath(sessionFile);
             int savedRufflePort = ReadRufflePort(rufflePortFile);
@@ -180,6 +182,26 @@ public static class Program
         }
         finally
         {
+            if (serviceProvider is not null)
+            {
+                try
+                {
+                    await serviceProvider.DisposeAsync().ConfigureAwait(false);
+                    WriteStartupDiagnostic(startupLogFile, "[Startup] Dependency injection container disposed.");
+                }
+                catch (OperationCanceledException exception)
+                {
+                    // Skua's GameApiThreadSafeWrapper currently surfaces its expected
+                    // cancellation from StopAsync during ScriptInterface disposal.
+                    // Keep this cleanup exception from hiding the real startup result.
+                    WriteStartupDiagnostic(startupLogFile, $"[Startup] Skua cleanup cancellation: {exception.Message}");
+                }
+                catch (Exception exception)
+                {
+                    WriteStartupDiagnostic(startupLogFile, $"[Startup] Service cleanup failed: {exception}");
+                }
+            }
+
             WriteStartupDiagnostic(startupLogFile, "[Startup] Cleaning up the player session file.");
             TryDeleteFile(sessionFile);
         }
@@ -216,7 +238,12 @@ public static class Program
         WriteStartupDiagnostic(startupLogFile, "[RufflePatch] Reading bridge resource.");
         using StreamReader reader = new(bridgeStream);
         string bridge = reader.ReadToEnd();
-        WriteStartupDiagnostic(startupLogFile, $"[RufflePatch] Bridge resource read ({bridge.Length:N0} characters).");
+        int originalBridgeLength = bridge.Length;
+        bridge = bridge.Replace("\r\n", "\n", StringComparison.Ordinal);
+        WriteStartupDiagnostic(
+            startupLogFile,
+            $"[RufflePatch] Bridge resource read and line endings normalized ({originalBridgeLength:N0} -> {bridge.Length:N0} characters)."
+        );
 
         WriteStartupDiagnostic(startupLogFile, "[RufflePatch] Validating Ruffle bridge markers.");
         const string scaleOption = "            scale: \"showAll\",";
@@ -384,7 +411,7 @@ public static class Program
         {
             try
             {
-                return serviceProvider.GetRequiredService<T>();
+                return rootServices.GetRequiredService<T>();
             }
             catch (IOException exception) when (IsFileSharingViolation(exception))
             {
