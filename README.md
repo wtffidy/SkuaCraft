@@ -82,7 +82,7 @@ git submodule update --init --recursive
 ./player-host/Publish-PlayerHost.ps1
 ~~~
 
-The mod build copies the install-ready JAR into `dist/` at the repository root. The script publishes a self-contained player host to player-host/publish/win-x64/.
+The mod build copies the install-ready JAR into the repository's `build/` folder. The script publishes a self-contained player host to player-host/publish/win-x64/.
 
 ## 🔐 Local runtime safety
 
