@@ -27,10 +27,10 @@ public sealed class PlayerDialogService : IDialogService
         return false;
     }
 
-    public DialogResult ShowMessageBox(string message, string caption, params string[] buttons)
+    public Skua.Core.Models.DialogResult ShowMessageBox(string message, string caption, params string[] buttons)
     {
         Console.WriteLine($"[Skua dialog] {caption}: {message}");
-        return DialogResult.Cancelled;
+        return Skua.Core.Models.DialogResult.Cancelled;
     }
 
     public IInputDialogViewModel CreateInputDialog(string title, string dialogHint)
