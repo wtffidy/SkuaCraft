@@ -76,7 +76,7 @@ public final class PlayerControlClient {
 
             try {
                 HttpRequest.Builder builder = HttpRequest.newBuilder(URI.create(baseUrl + relativePath))
-                        .timeout("POST".equals(method) ? Duration.ofMinutes(2) : Duration.ofSeconds(20))
+                        .timeout("POST".equals(method) ? Duration.ofMinutes(10) : Duration.ofSeconds(30))
                         .header("Accept", "application/json")
                         .header(TOKEN_HEADER, token);
 
@@ -111,7 +111,7 @@ public final class PlayerControlClient {
                 }
             } catch (Exception exception) {
                 String message = exception instanceof java.net.http.HttpTimeoutException
-                        ? "Skua Core did not respond in time. The script may still be downloading or compiling; check config/skuacraft/logs/player-host.log."
+                        ? "Skua Core did not respond within 10 minutes. Check config/skuacraft/logs/player-host.log; the script may still be processing."
                         : exception instanceof IOException
                             ? "Could not reach the embedded Skua runtime."
                             : exception.getMessage() == null ? "Unknown Skua control error." : exception.getMessage();

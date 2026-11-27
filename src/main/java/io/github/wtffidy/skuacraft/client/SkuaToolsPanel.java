@@ -36,7 +36,7 @@ public final class SkuaToolsPanel {
     private boolean searchFocused;
     private boolean searchSelected;
     private int searchCaret;
-    private int pageIndex;
+    private int scrollOffset;
     private double wheelAccumulator;
 
     public boolean isOpen() {
@@ -87,7 +87,7 @@ public final class SkuaToolsPanel {
     private void handleScripts(JsonElement response) {
         scriptsLoading = false;
         scripts.clear();
-        pageIndex = 0;
+        scrollOffset = 0;
 
         if (response != null && response.isJsonObject()) {
             JsonObject result = response.getAsJsonObject();
@@ -237,9 +237,9 @@ public final class SkuaToolsPanel {
         int right = x + width;
 
         List<JsonObject> filtered = getFilteredScripts();
-        int pageCount = Math.max(1, (filtered.size() + layout.pageSize - 1) / layout.pageSize);
-        pageIndex = Math.max(0, Math.min(pageIndex, pageCount - 1));
-        int start = pageIndex * layout.pageSize;
+        int maxScroll = Math.max(0, filtered.size() - layout.pageSize);
+        scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+        int start = scrollOffset;
         int end = Math.min(filtered.size(), start + layout.pageSize);
 
         graphics.fill(x - 3, y - 3, right + 3, y + layout.height + 3, 0xB8000000);
@@ -272,10 +272,10 @@ public final class SkuaToolsPanel {
                     Math.min(cursorX, right - 18) + 1, layout.searchY + 15, TEAL);
         }
 
-        String countText = filtered.size() + " MATCHES  ·  PAGE " + (pageIndex + 1) + "/" + pageCount;
+        String countText = filtered.isEmpty() ? "0 MATCHES" : "SHOWING " + (start + 1) + "-" + end + " OF " + filtered.size();
         graphics.drawString(font, clip(font, countText, width - 100), x + 15, layout.pageY + 5, VIOLET, false);
-        drawButton(graphics, font, right - 65, layout.pageY, 25, 18, "<", VIOLET, pageIndex > 0);
-        drawButton(graphics, font, right - 36, layout.pageY, 25, 18, ">", VIOLET, pageIndex + 1 < pageCount);
+        drawButton(graphics, font, right - 65, layout.pageY, 25, 18, "<", VIOLET, scrollOffset > 0);
+        drawButton(graphics, font, right - 36, layout.pageY, 25, 18, ">", VIOLET, scrollOffset < maxScroll);
 
         for (int i = start; i < end; i++) {
             JsonObject script = filtered.get(i);
@@ -343,19 +343,19 @@ public final class SkuaToolsPanel {
 
         searchFocused = false;
         List<JsonObject> filtered = getFilteredScripts();
-        int pageCount = Math.max(1, (filtered.size() + layout.pageSize - 1) / layout.pageSize);
+        int maxScroll = Math.max(0, filtered.size() - layout.pageSize);
 
         if (inside(mouseX, mouseY, right - 65, layout.pageY, 25, 18)) {
-            pageIndex = Math.max(0, pageIndex - 1);
+            scrollOffset = Math.max(0, scrollOffset - layout.pageSize);
             return true;
         }
 
         if (inside(mouseX, mouseY, right - 36, layout.pageY, 25, 18)) {
-            pageIndex = Math.min(pageCount - 1, pageIndex + 1);
+            scrollOffset = Math.min(maxScroll, scrollOffset + layout.pageSize);
             return true;
         }
 
-        int start = pageIndex * layout.pageSize;
+        int start = scrollOffset;
         int end = Math.min(filtered.size(), start + layout.pageSize);
         for (int i = start; i < end; i++) {
             int rowY = layout.listTop + (i - start) * ROW_HEIGHT;
@@ -387,13 +387,14 @@ public final class SkuaToolsPanel {
 
         PanelLayout layout = layout(screenWidth, screenHeight);
         List<JsonObject> filtered = getFilteredScripts();
-        int pageCount = Math.max(1, (filtered.size() + layout.pageSize - 1) / layout.pageSize);
+        int maxScroll = Math.max(0, filtered.size() - layout.pageSize);
 
+        // Scroll individual script rows rather than jumping an entire page per wheel notch.
         wheelAccumulator += delta;
-        int pageDelta = (int) wheelAccumulator;
-        if (pageDelta != 0) {
-            pageIndex = Math.max(0, Math.min(pageCount - 1, pageIndex - pageDelta));
-            wheelAccumulator -= pageDelta;
+        int rowDelta = (int) wheelAccumulator;
+        if (rowDelta != 0) {
+            scrollOffset = Math.max(0, Math.min(maxScroll, scrollOffset - rowDelta));
+            wheelAccumulator -= rowDelta;
         }
 
         return true;
@@ -426,7 +427,7 @@ public final class SkuaToolsPanel {
                 searchCaret--;
             }
 
-            pageIndex = 0;
+            scrollOffset = 0;
             return true;
         }
 
@@ -439,7 +440,7 @@ public final class SkuaToolsPanel {
                 searchText = searchText.substring(0, searchCaret) + searchText.substring(searchCaret + 1);
             }
 
-            pageIndex = 0;
+            scrollOffset = 0;
             return true;
         }
 
@@ -483,7 +484,7 @@ public final class SkuaToolsPanel {
 
         searchText = searchText.substring(0, searchCaret) + codePoint + searchText.substring(searchCaret);
         searchCaret++;
-        pageIndex = 0;
+        scrollOffset = 0;
         return true;
     }
 

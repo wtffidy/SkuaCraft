@@ -99,7 +99,8 @@ public final class SkuaPlayerScreen extends Screen {
     private void layoutBrowser() {
         int availableWidth = Math.max(160, width - 36);
         int availableHeight = Math.max(100, height - 78);
-        double scale = Math.min(availableWidth / 960.0, availableHeight / 550.0);
+        // Cap the default window instead of scaling it to fill the entire Minecraft viewport.
+        double scale = Math.min(1.0, Math.min(availableWidth / 960.0, availableHeight / 550.0));
 
         browserWidth = Math.max(160, (int) Math.round(960.0 * scale));
         browserHeight = Math.max(100, (int) Math.round(550.0 * scale));

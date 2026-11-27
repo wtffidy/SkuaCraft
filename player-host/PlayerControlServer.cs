@@ -228,9 +228,11 @@ public sealed class PlayerControlServer : IAsyncDisposable
 
             if (request.Path.EndsWith("/load", StringComparison.OrdinalIgnoreCase))
             {
+                Console.WriteLine($"[PlayerControl] Loaded {info.FilePath} in {commandTimer.ElapsedMilliseconds} ms.");
                 return (200, new { success = true, message = $"Loaded {info.Name}.", path = info.FilePath });
             }
 
+            Console.WriteLine($"[PlayerControl] Compiling and starting {info.FilePath}.");
             Exception? startError = await scriptManager.StartScript().ConfigureAwait(false);
             if (startError is not null)
             {
