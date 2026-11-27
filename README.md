@@ -50,12 +50,13 @@ The MVS v1.0.6 source is pinned as a Git submodule at vendor/MVS. The desktop Vi
 
 Versioned GitHub Releases contain both installable pieces: the Minecraft mod JAR and the self-contained Windows PlayerHost ZIP. Pushing a matching `v*` version tag builds, smoke-tests and publishes a release automatically. Pull requests and ordinary branch builds only run validation; they do not publish downloads.
 
-1. Download `SkuaCraft-<version>.jar` and `SkuaCraft-PlayerHost-win-x64-<version>.zip` from the [SkuaCraft Releases page](https://github.com/wtffidy/SkuaCraft/releases).
+1. Download both `SkuaCraft-<version>.jar` and `SkuaCraft-PlayerHost-win-x64-<version>.zip` from the [SkuaCraft Releases page](https://github.com/wtffidy/SkuaCraft/releases).
 2. Install the mod JAR and its required Rinku 3.0.4 library in the Project Infinity instance.
-3. Extract the PlayerHost ZIP anywhere, then run `player-host/Install-PlayerHost.ps1`. It opens a folder picker for your Minecraft instance and installs the host into `config/skuacraft/player-host/` automatically. You can also pass `-InstancePath "C:\\path\\to\\instance"` to skip the picker.
+3. Extract the player-host files into:
+   <escape><code>&lt;Minecraft instance&gt;/config/skuacraft/player-host/</code></escape>
 4. Launch Minecraft, equip the Skua Console and right-click it.
 
-The PlayerHost ZIP contains the executable and its runtime files. Keep the extracted files together until the installer copies them into the instance. Rinku 3.0.4 remains a separate required Minecraft mod/library and is not bundled into the SkuaCraft JAR.
+The PlayerHost ZIP contains the executable and its runtime files. Keep the extracted files together in the `player-host` directory. Rinku 3.0.4 remains a separate required Minecraft mod/library and is not bundled into the SkuaCraft JAR.
 
 On first launch, Rinku may download its matching Chromium/JCEF runtime. The player host then starts locally, writes a short-lived session file and serves the Ruffle page through a tokenized loopback URL.
 

@@ -7,7 +7,12 @@ $ErrorActionPreference = "Stop"
 
 $ScriptDirectory = $PSScriptRoot
 $ProjectRoot = Split-Path $ScriptDirectory -Parent
-$PublishDirectory = Join-Path $ScriptDirectory "publish\\win-x64"
+$PublishedOutputDirectory = Join-Path $ScriptDirectory "publish\\win-x64"
+$PublishDirectory = if (Test-Path (Join-Path $ScriptDirectory "SkuaCraft.PlayerHost.exe")) {
+    $ScriptDirectory
+} else {
+    $PublishedOutputDirectory
+}
 $PlayerHostExecutable = Join-Path $PublishDirectory "SkuaCraft.PlayerHost.exe"
 
 function Select-MinecraftInstance {
@@ -54,7 +59,7 @@ if (-not (Test-Path -LiteralPath $PlayerHostExecutable -PathType Leaf)) {
     $ProjectFile = Join-Path $ScriptDirectory "SkuaCraft.PlayerHost.csproj"
     $MvsSource = Join-Path $ProjectRoot "vendor\\MVS\\src"
     if (-not (Test-Path $MvsSource)) {
-        throw "MVS source is missing. Run: git submodule update --init --recursive"
+        throw "PlayerHost files are not beside this installer, and MVS source is missing. Extract the PlayerHost release ZIP or run git submodule update --init --recursive."
     }
 
     if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) {
@@ -62,10 +67,14 @@ if (-not (Test-Path -LiteralPath $PlayerHostExecutable -PathType Leaf)) {
     }
 
     Write-Host "[SKUA] Publishing self-contained Windows PlayerHost..." -ForegroundColor Cyan
-    & dotnet publish $ProjectFile -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=false -o $PublishDirectory
+    & dotnet publish $ProjectFile -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=false -o $PublishedOutputDirectory
     if ($LASTEXITCODE -ne 0) {
         throw "PlayerHost publish failed with exit code $LASTEXITCODE."
     }
+}
+
+if (-not (Test-Path -LiteralPath $PlayerHostExecutable -PathType Leaf)) {
+    throw "PlayerHost executable was not found after publishing: $PlayerHostExecutable"
 }
 
 $Destination = Join-Path $InstancePath "config\\skuacraft\\player-host"
