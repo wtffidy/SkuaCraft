@@ -2,24 +2,32 @@
 setlocal
 title SkuaCraft Build
 
-where gradle >nul 2>nul
-if errorlevel 1 (
-    echo [ERROR] Gradle 8.8 or newer was not found on PATH.
-    echo Install Gradle 8.8 and Java 17, then run this file again.
+set "SCRIPT_DIR=%~dp0"
+set "BUILD_SCRIPT=%SCRIPT_DIR%Build.ps1"
+
+if not exist "%BUILD_SCRIPT%" (
+    echo [ERROR] Build.ps1 was not found.
+    echo Expected: "%BUILD_SCRIPT%"
     pause
     exit /b 1
 )
 
-echo [SKUA] Building Minecraft 1.20.1 / Forge 47.4.28...
-gradle build
+where powershell.exe >nul 2>nul
 if errorlevel 1 (
-    echo.
-    echo [FAILED] Check the build output above.
+    echo [ERROR] Windows PowerShell was not found.
     pause
-    exit /b %errorlevel%
+    exit /b 1
 )
 
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%BUILD_SCRIPT%"
+set "BUILD_EXIT=%ERRORLEVEL%"
+
 echo.
-echo [SUCCESS] Mod built:
-dir /b build\libs\*.jar
+if "%BUILD_EXIT%"=="0" (
+    echo [SUCCESS] SkuaCraft build completed.
+) else (
+    echo [FAILED] Build exited with code %BUILD_EXIT%.
+)
+
 pause
+exit /b %BUILD_EXIT%
