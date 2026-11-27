@@ -357,9 +357,24 @@ if ($Artifacts.Count -eq 0) {
     throw "Gradle completed, but no mod JAR was found in build\libs."
 }
 
+$DistributionDirectory = Join-Path $ProjectRoot "dist"
+New-Item -ItemType Directory -Path $DistributionDirectory -Force | Out-Null
+
+# Remove old JARs so dist always represents the latest successful build.
+Get-ChildItem $DistributionDirectory -Filter "*.jar" -File -ErrorAction SilentlyContinue |
+    Remove-Item -Force
+
+foreach ($Artifact in $Artifacts) {
+    $Destination = Join-Path $DistributionDirectory $Artifact.Name
+    Copy-Item -LiteralPath $Artifact.FullName -Destination $Destination -Force
+}
+
 Write-Host ""
 Write-Host "[SUCCESS] SkuaCraft build completed." -ForegroundColor Green
-Write-Host "Output:"
+Write-Host "Build output:"
 foreach ($Artifact in $Artifacts) {
-    Write-Host "  $($Artifact.FullName)" -ForegroundColor Green
+    Write-Host "  $($Artifact.FullName)" -ForegroundColor DarkGray
 }
+Write-Host "Ready-to-install JAR:"
+Get-ChildItem $DistributionDirectory -Filter "*.jar" -File |
+    ForEach-Object { Write-Host "  $($_.FullName)" -ForegroundColor Green }
