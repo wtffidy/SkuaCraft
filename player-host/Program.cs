@@ -29,6 +29,13 @@ public static class Program
             ?? Path.Combine(AppContext.BaseDirectory, "player-session.json");
         string stopFile = GetArgument(args, "--stop-file")
             ?? Path.Combine(AppContext.BaseDirectory, "player-stop.request");
+        string? sessionDirectory = Path.GetDirectoryName(sessionFile);
+        string startupLogFile = Path.Combine(
+            string.IsNullOrWhiteSpace(sessionDirectory) ? AppContext.BaseDirectory : sessionDirectory,
+            "player-host-startup.log"
+        );
+
+        WriteStartupDiagnostic(startupLogFile, $"[Startup] Main entered. PID={Environment.ProcessId}, BaseDirectory={AppContext.BaseDirectory}");
 
         using CancellationTokenSource shutdown = new();
         Console.CancelKeyPress += (_, eventArgs) =>
@@ -50,8 +57,10 @@ public static class Program
                 Console.WriteLine($"[Runtime] Could not lower PlayerHost process priority: {exception.Message}");
             }
 
+            WriteStartupDiagnostic(startupLogFile, "[Startup] Configuring dependency injection.");
             ServiceCollection services = new();
             ConfigureServices(services);
+            WriteStartupDiagnostic(startupLogFile, "[Startup] Building dependency injection container.");
 
             await using ServiceProvider serviceProvider = services.BuildServiceProvider(
                 new ServiceProviderOptions
@@ -61,6 +70,7 @@ public static class Program
                 }
             );
 
+            WriteStartupDiagnostic(startupLogFile, "[Startup] Dependency injection container built.");
             Ioc.Default.ConfigureServices(serviceProvider);
             using PlayerScriptDiagnostics scriptDiagnostics = new();
             Console.WriteLine($"[Runtime] PlayerHost is limited to {Environment.ProcessorCount} logical processors.");
@@ -90,7 +100,9 @@ public static class Program
             }
 
             Console.WriteLine("[Startup] Applying the embedded Ruffle bridge patch.");
-            ApplyRuffleScalingPatch(playerHost);
+            WriteStartupDiagnostic(startupLogFile, "[Startup] Entering ApplyRuffleScalingPatch.");
+            ApplyRuffleScalingPatch(playerHost, startupLogFile);
+            WriteStartupDiagnostic(startupLogFile, "[Startup] ApplyRuffleScalingPatch completed.");
             Console.WriteLine("[Startup] Ruffle bridge patch applied.");
             playerHost.Control.PageLog += message =>
             {
@@ -123,6 +135,7 @@ public static class Program
             controlServer.Start();
 
             WriteSessionFile(sessionFile, playerHost.PageUrl, controlServer.BaseUrl, controlServer.Token);
+            WriteStartupDiagnostic(startupLogFile, "[Startup] Player session published successfully.");
             Console.WriteLine($"SKUA_PLAYER_READY {playerHost.PageUrl}");
 
             await WaitForStopAsync(stopFile, shutdown.Token).ConfigureAwait(false);
@@ -138,10 +151,12 @@ public static class Program
         }
         catch (OperationCanceledException)
         {
+            WriteStartupDiagnostic(startupLogFile, "[Startup] Shutdown cancellation received.");
             return 0;
         }
         catch (Exception exception)
         {
+            WriteStartupDiagnostic(startupLogFile, $"[Startup] FATAL: {exception}");
             Console.Error.WriteLine($"SkuaCraft player host failed: {exception}");
             return 1;
         }
@@ -151,16 +166,20 @@ public static class Program
         }
     }
 
-    private static void ApplyRuffleScalingPatch(RuffleHost playerHost)
+    private static void ApplyRuffleScalingPatch(RuffleHost playerHost, string startupLogFile)
     {
+        WriteStartupDiagnostic(startupLogFile, "[RufflePatch] Looking up embedded resource cache.");
         FieldInfo? cacheField = typeof(RuffleHost).GetField("_resourceCache", BindingFlags.Instance | BindingFlags.NonPublic);
         if (cacheField?.GetValue(playerHost) is not ConcurrentDictionary<string, byte[]> resourceCache)
         {
             throw new InvalidOperationException("Could not access the embedded Ruffle resource cache to apply responsive SWF scaling.");
         }
 
+        WriteStartupDiagnostic(startupLogFile, "[RufflePatch] Resource cache found. Enumerating Ruffle resources.");
         Assembly ruffleAssembly = typeof(RuffleHost).Assembly;
-        string? bridgeResourceName = ruffleAssembly.GetManifestResourceNames()
+        string[] resourceNames = ruffleAssembly.GetManifestResourceNames();
+        WriteStartupDiagnostic(startupLogFile, $"[RufflePatch] Found {resourceNames.Length} embedded resources.");
+        string? bridgeResourceName = resourceNames
             .FirstOrDefault(name => string.Equals(name.Replace('\\', '/'), "web/bridge.js", StringComparison.Ordinal));
 
         if (bridgeResourceName is null)
@@ -168,15 +187,19 @@ public static class Program
             throw new InvalidOperationException("The embedded Ruffle bridge.js resource was not found.");
         }
 
+        WriteStartupDiagnostic(startupLogFile, $"[RufflePatch] Opening bridge resource '{bridgeResourceName}'.");
         using Stream? bridgeStream = ruffleAssembly.GetManifestResourceStream(bridgeResourceName);
         if (bridgeStream is null)
         {
             throw new InvalidOperationException("The embedded Ruffle bridge.js resource could not be opened.");
         }
 
+        WriteStartupDiagnostic(startupLogFile, "[RufflePatch] Reading bridge resource.");
         using StreamReader reader = new(bridgeStream);
         string bridge = reader.ReadToEnd();
+        WriteStartupDiagnostic(startupLogFile, $"[RufflePatch] Bridge resource read ({bridge.Length:N0} characters).");
 
+        WriteStartupDiagnostic(startupLogFile, "[RufflePatch] Validating Ruffle bridge markers.");
         const string scaleOption = "            scale: \"showAll\",";
         if (!bridge.Contains(scaleOption, StringComparison.Ordinal))
         {
@@ -285,6 +308,7 @@ public static class Program
     }
 
 """;
+        WriteStartupDiagnostic(startupLogFile, "[RufflePatch] Injecting AQW layout and ExternalInterface diagnostics.");
         bridge = bridge.Replace(
             fitFunctionMarker,
             stageDiagnostic + externalCallMonitor + fitFunctionMarker,
@@ -299,6 +323,7 @@ public static class Program
         }
 
         bridge = bridge.Replace(externalCallStart, instrumentedExternalCallStart, StringComparison.Ordinal);
+        WriteStartupDiagnostic(startupLogFile, "[RufflePatch] ExternalInterface start instrumentation applied.");
 
         const string externalCallEnd = "                send(reply);\n                break;\n            }\n            case \"batch\": {";
         const string instrumentedExternalCallEnd = "                send(reply);\n                reportAqwExternalCall(msg.f, callStartedAt);\n                break;\n            }\n            case \"batch\": {";
@@ -308,6 +333,7 @@ public static class Program
         }
 
         bridge = bridge.Replace(externalCallEnd, instrumentedExternalCallEnd, StringComparison.Ordinal);
+        WriteStartupDiagnostic(startupLogFile, "[RufflePatch] ExternalInterface end instrumentation applied.");
         bridge = bridge.Replace(
             loadedHandler,
             loadedHandler[..^1] + " setTimeout(startAqwLayoutMonitor, 0); }",
@@ -319,10 +345,36 @@ public static class Program
             + "\n            salign: \"\","
             + "\n            forceAlign: true,";
 
+        WriteStartupDiagnostic(startupLogFile, "[RufflePatch] Applying final scale settings.");
         bridge = bridge.Replace(scaleOption, scalePatch, StringComparison.Ordinal);
-        resourceCache["web/bridge.js"] = Encoding.UTF8.GetBytes(bridge);
+        byte[] patchedBridge = Encoding.UTF8.GetBytes(bridge);
+        WriteStartupDiagnostic(startupLogFile, $"[RufflePatch] Updating cached bridge ({patchedBridge.Length:N0} bytes).");
+        resourceCache["web/bridge.js"] = patchedBridge;
 
+        WriteStartupDiagnostic(startupLogFile, "[RufflePatch] Patch completed successfully.");
         Console.WriteLine("[Ruffle] Using SHOW_ALL with AQW's native 958x550 layout.");
+    }
+
+    private static void WriteStartupDiagnostic(string path, string message)
+    {
+        try
+        {
+            string? directory = Path.GetDirectoryName(path);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            File.AppendAllText(
+                path,
+                $"{DateTimeOffset.Now:O} {message}{Environment.NewLine}",
+                Encoding.UTF8
+            );
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException)
+        {
+            // Startup diagnostics must never prevent the embedded player from launching.
+        }
     }
 
     private static void ConfigureServices(IServiceCollection services)
