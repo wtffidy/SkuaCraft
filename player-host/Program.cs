@@ -162,8 +162,8 @@ public static class Program
         }
 
         const string stageDiagnostic = """
-    let aqwFitTimer = 0;
-    let lastAqwFit = "";
+    let aqwScaleMonitor = 0;
+    let lastAqwViewport = "";
 
     function readAqwNumber(game, path) {
         try {
@@ -174,7 +174,7 @@ public static class Program
         }
     }
 
-    function fitAqwRootToStage() {
+    function keepAqwNativeLayout() {
         if (!player || !player.ruffle) return;
 
         try {
@@ -188,51 +188,47 @@ public static class Program
 
             if (rootWidth <= 0 || rootHeight <= 0 || stageWidth <= 0 || stageHeight <= 0) return;
 
-            // DisplayObject.width/height include the current transform. Convert
-            // back to the unscaled bounds so repeated checks remain idempotent.
-            const baseWidth = rootWidth / Math.abs(currentScaleX);
-            const baseHeight = rootHeight / Math.abs(currentScaleY);
-            const fitScale = Math.min(stageWidth / baseWidth, stageHeight / baseHeight);
-            if (!Number.isFinite(fitScale) || fitScale <= 0) return;
+            // The root bounds include oversized/off-stage AQW children. They are
+            // not the intended viewport size. Keep AQW's own authored coordinates
+            // and let the 958x550 Flash stage clip the off-stage portion naturally.
+            if (Math.abs(currentScaleX - 1) > 0.001)
+                game.callExternalInterface("setGameObject", "scaleX", 1);
+            if (Math.abs(currentScaleY - 1) > 0.001)
+                game.callExternalInterface("setGameObject", "scaleY", 1);
 
-            const targetScaleX = Math.sign(currentScaleX) * fitScale;
-            const targetScaleY = Math.sign(currentScaleY) * fitScale;
-
-            if (Math.abs(currentScaleX - targetScaleX) > 0.001)
-                game.callExternalInterface("setGameObject", "scaleX", targetScaleX);
-            if (Math.abs(currentScaleY - targetScaleY) > 0.001)
-                game.callExternalInterface("setGameObject", "scaleY", targetScaleY);
-
+            const loginWidth = readAqwNumber(game, "mcLogin.width");
+            const loginHeight = readAqwNumber(game, "mcLogin.height");
+            const loginX = readAqwNumber(game, "mcLogin.x");
+            const loginY = readAqwNumber(game, "mcLogin.y");
             const actualScaleX = readAqwNumber(game, "scaleX");
             const actualScaleY = readAqwNumber(game, "scaleY");
-            const actualWidth = readAqwNumber(game, "width");
-            const actualHeight = readAqwNumber(game, "height");
-            const signature = [baseWidth, baseHeight, stageWidth, stageHeight, fitScale, actualWidth, actualHeight]
+            const signature = [stageWidth, stageHeight, rootWidth, rootHeight, loginWidth, loginHeight, loginX, loginY, actualScaleX, actualScaleY]
                 .map(value => value.toFixed(2)).join("|");
-            if (signature !== lastAqwFit) {
-                lastAqwFit = signature;
-                log("AQW root fit: source " + baseWidth.toFixed(1) + "x" + baseHeight.toFixed(1)
-                    + ", stage " + stageWidth + "x" + stageHeight
-                    + ", target scale " + fitScale.toFixed(5)
-                    + ", actual scale " + actualScaleX.toFixed(5) + "," + actualScaleY.toFixed(5)
-                    + ", actual root " + actualWidth.toFixed(1) + "x" + actualHeight.toFixed(1));
+
+            if (signature !== lastAqwViewport) {
+                lastAqwViewport = signature;
+                log("AQW native layout: stage " + stageWidth + "x" + stageHeight
+                    + ", root bounds " + rootWidth.toFixed(1) + "x" + rootHeight.toFixed(1)
+                    + ", scale " + actualScaleX.toFixed(5) + "," + actualScaleY.toFixed(5)
+                    + ", login " + loginWidth.toFixed(1) + "x" + loginHeight.toFixed(1)
+                    + " at " + loginX.toFixed(1) + "," + loginY.toFixed(1));
             }
         } catch (error) {
-            log("AQW root fit failed: " + error);
+            log("AQW native layout failed: " + error);
         }
     }
 
-    function startAqwFitMonitor() {
-        if (aqwFitTimer) clearInterval(aqwFitTimer);
-        fitAqwRootToStage();
-        aqwFitTimer = setInterval(fitAqwRootToStage, 500);
+    function startAqwLayoutMonitor() {
+        if (aqwScaleMonitor) clearInterval(aqwScaleMonitor);
+        keepAqwNativeLayout();
+        aqwScaleMonitor = setInterval(keepAqwNativeLayout, 500);
     }
 
 """;
         bridge = bridge.Replace(fitFunctionMarker, stageDiagnostic + fitFunctionMarker, StringComparison.Ordinal);
         bridge = bridge.Replace(
             loadedHandler,
-            loadedHandler[..^1] + " setTimeout(startAqwFitMonitor, 0); }",
+            loadedHandler[..^1] + " setTimeout(startAqwLayoutMonitor, 0); }",
             StringComparison.Ordinal
         );
 
@@ -244,7 +240,7 @@ public static class Program
         bridge = bridge.Replace(scaleOption, scalePatch, StringComparison.Ordinal);
         resourceCache["web/bridge.js"] = Encoding.UTF8.GetBytes(bridge);
 
-        Console.WriteLine("[Ruffle] Using SHOW_ALL and automatic AQW root fitting.");
+        Console.WriteLine("[Ruffle] Using SHOW_ALL with AQW's native 958x550 layout.");
     }
 
     private static void ConfigureServices(IServiceCollection services)
