@@ -93,7 +93,7 @@ The mod JAR is copied into the repository's `build/` folder, and PlayerHost is p
 | [Rinku](https://github.com/Keksuccino/Rinku) | Chromium browser surface for Minecraft |
 | [auqw/Scripts (Skua)](https://github.com/auqw/Scripts/tree/Skua) | Official upstream script catalogue, metadata, source files and update feed |
 
-The scripts repository is reference material. SkuaCraft does not generate, author or modify AQW scripts.
+SkuaCraft reads the live catalogue from the upstream `auqw/Scripts` `Skua` branch, downloads official script files directly from that branch, and checks its metadata for updates. SkuaCraft does not generate, author or modify AQW scripts.
 
 ## 🚧 Development status
 
