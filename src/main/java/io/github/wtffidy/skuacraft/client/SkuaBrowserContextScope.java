@@ -4,9 +4,14 @@ import com.mojang.blaze3d.systems.RenderSystem;
 import de.keksuccino.rinku.Rinku;
 import de.keksuccino.rinku.RinkuBrowser;
 import net.minecraft.client.Minecraft;
+import org.cef.CefRequestContextSettings;
 import org.cef.browser.CefRequestContext;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -50,7 +55,7 @@ public final class SkuaBrowserContextScope {
 
         CefRequestContext context = REQUEST_CONTEXTS.computeIfAbsent(
                 accountId,
-                ignored -> CefRequestContext.createContext(null)
+                SkuaBrowserContextScope::createRequestContext
         );
         if (context == null) {
             throw new IllegalStateException("CEF could not create an isolated request context for account " + accountId + ".");
@@ -73,6 +78,66 @@ public final class SkuaBrowserContextScope {
             PENDING_CONTEXT.remove();
             CONTEXT_CONSUMED.remove();
         }
+    }
+
+    private static CefRequestContext createRequestContext(String accountId) {
+        if (!Rinku.getSettings().isUsingCache()) {
+            return CefRequestContext.createContext((org.cef.handler.CefRequestContextHandler) null);
+        }
+
+        Path cachePath = resolveCefCacheRoot()
+                .resolve("accounts")
+                .resolve(accountId)
+                .toAbsolutePath()
+                .normalize();
+
+        try {
+            Files.createDirectories(cachePath);
+        } catch (IOException exception) {
+            throw new IllegalStateException(
+                    "Could not create the persistent browser profile for account " + accountId + ".",
+                    exception
+            );
+        }
+
+        CefRequestContextSettings settings = new CefRequestContextSettings();
+        settings.cache_path = cachePath.toString();
+        settings.persist_session_cookies = true;
+        return CefRequestContext.createContext(settings, null);
+    }
+
+    /**
+     * Mirrors Rinku's persistent cache root so account contexts remain beneath
+     * the root cache path configured by Rinku before CEF initialization.
+     */
+    private static Path resolveCefCacheRoot() {
+        String operatingSystem = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        String userHome = System.getProperty("user.home", ".");
+
+        if (operatingSystem.contains("win")) {
+            String localAppData = System.getenv("LOCALAPPDATA");
+            if (localAppData != null && !localAppData.isBlank()) {
+                return Path.of(localAppData).resolve("Rinku").resolve("cef-cache");
+            }
+
+            String appData = System.getenv("APPDATA");
+            if (appData != null && !appData.isBlank()) {
+                return Path.of(appData).resolve("Rinku").resolve("cef-cache");
+            }
+
+            return Path.of(userHome, "AppData", "Local", "Rinku", "cef-cache");
+        }
+
+        if (operatingSystem.contains("mac")) {
+            return Path.of(userHome, "Library", "Application Support", "Rinku", "cef-cache");
+        }
+
+        String xdgDataHome = System.getenv("XDG_DATA_HOME");
+        if (xdgDataHome != null && !xdgDataHome.isBlank()) {
+            return Path.of(xdgDataHome).resolve("rinku").resolve("cef-cache");
+        }
+
+        return Path.of(userHome, ".local", "share", "rinku", "cef-cache");
     }
 
     /**
