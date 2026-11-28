@@ -17,19 +17,28 @@ import net.minecraft.world.phys.Vec3;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 
 public final class SkuaRackBlockEntity extends BlockEntity implements Container {
     public static final int SLOT_COUNT = 6;
 
     private final NonNullList<ItemStack> items = NonNullList.withSize(SLOT_COUNT, ItemStack.EMPTY);
     private int selectedSlot = -1;
+    private UUID ownerId;
 
     public SkuaRackBlockEntity(BlockPos position, BlockState state) {
         super(SkuaCraft.SERVER_RACK_ENTITY.get(), position, state);
     }
 
-    public boolean insertController(ItemStack controller) {
-        if (controller.isEmpty() || !(controller.getItem() instanceof SkuaConsoleItem)) {
+    public boolean insertController(ItemStack controller, Player player) {
+        if (player == null || controller.isEmpty() || !(controller.getItem() instanceof SkuaConsoleItem)) {
+            return false;
+        }
+
+        if (ownerId == null) {
+            setOwner(player.getUUID());
+        }
+        if (!isOwner(player)) {
             return false;
         }
 
@@ -75,6 +84,25 @@ public final class SkuaRackBlockEntity extends BlockEntity implements Container 
         }
         setChanged();
         return ejected;
+    }
+
+    public UUID getOwnerId() {
+        return ownerId;
+    }
+
+    public boolean hasOwner() {
+        return ownerId != null;
+    }
+
+    public boolean isOwner(Player player) {
+        return ownerId != null && player != null && ownerId.equals(player.getUUID());
+    }
+
+    public void setOwner(UUID ownerId) {
+        if (this.ownerId == null && ownerId != null) {
+            this.ownerId = ownerId;
+            setChanged();
+        }
     }
 
     public int getSelectedSlot() {
@@ -145,6 +173,7 @@ public final class SkuaRackBlockEntity extends BlockEntity implements Container 
     public void load(CompoundTag tag) {
         super.load(tag);
         ContainerHelper.loadAllItems(tag, items);
+        ownerId = tag.hasUUID("Owner") ? tag.getUUID("Owner") : null;
         selectedSlot = tag.contains("SelectedSlot") ? tag.getInt("SelectedSlot") : -1;
         if (selectedSlot < 0 || selectedSlot >= items.size() || items.get(selectedSlot).isEmpty()) {
             selectedSlot = findFirstOccupiedSlot();
@@ -156,6 +185,9 @@ public final class SkuaRackBlockEntity extends BlockEntity implements Container 
         super.saveAdditional(tag);
         ContainerHelper.saveAllItems(tag, items);
         tag.putInt("SelectedSlot", selectedSlot);
+        if (ownerId != null) {
+            tag.putUUID("Owner", ownerId);
+        }
     }
 
     @Override

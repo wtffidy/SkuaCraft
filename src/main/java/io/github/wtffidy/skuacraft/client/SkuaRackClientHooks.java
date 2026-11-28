@@ -21,7 +21,9 @@ public final class SkuaRackClientHooks {
 
     public static void tick(SkuaRackBlockEntity rack) {
         Level level = rack.getLevel();
-        if (level == null || level.getGameTime() % 40 != 0) {
+        Minecraft minecraft = Minecraft.getInstance();
+        if (level == null || minecraft.player == null || !rack.isOwner(minecraft.player)
+                || level.getGameTime() % 40 != 0) {
             return;
         }
 

@@ -27,7 +27,7 @@ public record RackSelectPacket(BlockPos position, int slot) {
             }
 
             if (!(player.level().getBlockEntity(packet.position) instanceof SkuaRackBlockEntity rack)
-                    || !rack.stillValid(player)) {
+                    || !rack.isOwner(player) || !rack.stillValid(player)) {
                 return;
             }
 

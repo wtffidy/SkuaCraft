@@ -58,7 +58,7 @@ The Skua Server Rack is a six-bay block for keeping several handheld account pro
 
 The rack starts its installed account sessions in the background while its chunk is loaded on the local client. The selected account's live Rinku texture is rendered on the small AQW panel on the rack's front. The default concurrent-session limit is six and can be changed with `player.maxRunningSessions` in `config/skuacraft-client.toml` (range 1–12). Running several AQW clients consumes additional CPU and memory.
 
-In the rack manager, left-click a bay to select its live front-panel display. Shift+left-click opens that account in the full Skua player screen for input. Right-click ejects the selected controller without stopping it; Ctrl+right-click stops it before ejecting.
+In the rack manager, left-click a bay to select its live front-panel display. Shift+left-click opens that account in the full Skua player screen for input. Right-click ejects the selected controller without stopping it; Ctrl+right-click stops it before ejecting. In multiplayer, the rack is owned by the player who placed it (or the first player to claim an unowned rack). Only that owner's client starts its account hosts and displays its live game feed; other clients see the rack model without launching duplicate account processes.
 
 ## 📦 Installation
 

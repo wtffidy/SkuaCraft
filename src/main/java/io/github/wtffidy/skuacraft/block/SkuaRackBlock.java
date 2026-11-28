@@ -10,6 +10,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -68,6 +69,16 @@ public final class SkuaRackBlock extends BaseEntityBlock {
             return InteractionResult.PASS;
         }
 
+        if (rack.hasOwner() && !rack.isOwner(player)) {
+            if (!level.isClientSide) {
+                player.displayClientMessage(
+                        Component.literal("This Skua rack belongs to another player."),
+                        true
+                );
+            }
+            return InteractionResult.FAIL;
+        }
+
         ItemStack heldStack = player.getItemInHand(hand);
 
         if (heldStack.getItem() instanceof SkuaConsoleItem) {
@@ -75,7 +86,7 @@ public final class SkuaRackBlock extends BaseEntityBlock {
                 return InteractionResult.SUCCESS;
             }
 
-            if (!rack.insertController(heldStack)) {
+            if (!rack.insertController(heldStack, player)) {
                 player.displayClientMessage(
                         Component.literal("This Skua rack is full or already contains that controller."),
                         true
@@ -111,6 +122,10 @@ public final class SkuaRackBlock extends BaseEntityBlock {
         }
 
         if (heldStack.isEmpty()) {
+            if (!level.isClientSide && !rack.hasOwner()) {
+                rack.setOwner(player.getUUID());
+            }
+
             if (level.isClientSide) {
                 DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> SkuaRackClientHooks.openRack(position));
             }
@@ -119,6 +134,15 @@ public final class SkuaRackBlock extends BaseEntityBlock {
         }
 
         return InteractionResult.PASS;
+    }
+
+    @Override
+    public void setPlacedBy(Level level, BlockPos position, BlockState state, LivingEntity placer, ItemStack stack) {
+        super.setPlacedBy(level, position, state, placer, stack);
+        if (!level.isClientSide && placer instanceof Player player
+                && level.getBlockEntity(position) instanceof SkuaRackBlockEntity rack) {
+            rack.setOwner(player.getUUID());
+        }
     }
 
     @Override

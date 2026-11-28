@@ -127,7 +127,9 @@ public final class PlayerHostManager {
                 }
 
                 int maxSessions = SkuaCraftConfig.MAX_RUNNING_SESSIONS.get();
-                int activeSessions = (int) INSTANCES.values().stream().filter(PlayerHostInstance::isAlive).count();
+                int activeSessions = (int) INSTANCES.values().stream()
+                        .filter(PlayerHostInstance::reservesCapacity)
+                        .count();
                 if (activeSessions >= maxSessions) {
                     dispatch(callback, LaunchResult.failed(
                             "The session limit has been reached (" + activeSessions + "/" + maxSessions
@@ -432,6 +434,11 @@ public final class PlayerHostManager {
                 return true;
             }
             return isSessionProcessAlive(sessionFile);
+        }
+
+        private boolean reservesCapacity() {
+            // A process-less instance is a startup reservation until its launch succeeds or fails.
+            return process == null || process.isAlive() || isSessionProcessAlive(sessionFile);
         }
     }
 
