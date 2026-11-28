@@ -23,15 +23,33 @@ public final class PlayerHostLauncher {
         ));
     }
 
+    /**
+     * Starts the host and the hidden browser required for AQW to keep executing.
+     * The browser is created without taking input focus or replacing the visible screen.
+     */
+    public static void ensureRunningInBackground(String accountId, Consumer<LaunchResult> callback) {
+        ensureRunning(accountId, result -> {
+            if (result.success()) {
+                SkuaPlayerBrowserSession.ensureBackground(accountId, result.pageUrl());
+            }
+
+            if (callback != null) {
+                callback.accept(result);
+            }
+        });
+    }
+
     public static List<String> getRunningAccountIds() {
         return PlayerHostManager.getRunningAccountIds();
     }
 
     public static void stop(String accountId) {
+        SkuaPlayerBrowserSession.close(accountId);
         PlayerHostManager.stop(accountId);
     }
 
     public static void stop() {
+        SkuaPlayerBrowserSession.closeAll();
         PlayerHostManager.stopAll();
     }
 

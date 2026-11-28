@@ -2,6 +2,7 @@ package io.github.wtffidy.skuacraft.client;
 
 import de.keksuccino.rinku.Rinku;
 import de.keksuccino.rinku.RinkuBrowser;
+import net.minecraft.client.Minecraft;
 
 import java.util.Comparator;
 import java.util.HashMap;
@@ -9,9 +10,49 @@ import java.util.List;
 import java.util.Map;
 
 public final class SkuaPlayerBrowserSession {
+    private static final int BACKGROUND_WIDTH = 480;
+    private static final int BACKGROUND_HEIGHT = 276;
     private static final Map<String, BrowserSession> BROWSERS = new HashMap<>();
 
     private SkuaPlayerBrowserSession() {
+    }
+
+    /**
+     * Creates or keeps alive the browser that actually executes AQW for an account.
+     * Background browsers remain loaded but do not own keyboard focus.
+     */
+    public static void ensureBackground(String accountId, String pageUrl) {
+        if (accountId == null || accountId.isBlank() || pageUrl == null || pageUrl.isBlank()) {
+            return;
+        }
+
+        if (!Rinku.isInitialized()) {
+            Rinku.scheduleForInit(success -> {
+                if (success) {
+                    Minecraft.getInstance().execute(() -> ensureBackground(accountId, pageUrl));
+                }
+            });
+            return;
+        }
+
+        Minecraft.getInstance().execute(() -> {
+            synchronized (SkuaPlayerBrowserSession.class) {
+                BrowserSession session = BROWSERS.get(accountId);
+                if (session != null && pageUrl.equals(session.pageUrl())) {
+                    session.browser().setFocus(false);
+                    return;
+                }
+
+                if (session != null) {
+                    session.browser().close();
+                }
+
+                RinkuBrowser browser = Rinku.createBrowser(pageUrl, false, BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
+                browser.useBrowserControls(false);
+                browser.setFocus(false);
+                BROWSERS.put(accountId, new BrowserSession(pageUrl, browser));
+            }
+        });
     }
 
     public static synchronized RinkuBrowser openOrReuse(String accountId, String requestedPageUrl, int width, int height) {
