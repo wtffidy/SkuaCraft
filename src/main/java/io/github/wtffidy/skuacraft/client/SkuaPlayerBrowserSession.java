@@ -3,50 +3,82 @@ package io.github.wtffidy.skuacraft.client;
 import de.keksuccino.rinku.Rinku;
 import de.keksuccino.rinku.RinkuBrowser;
 
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+
 public final class SkuaPlayerBrowserSession {
-    private static RinkuBrowser browser;
-    private static String pageUrl = "";
+    private static final Map<String, BrowserSession> BROWSERS = new HashMap<>();
 
     private SkuaPlayerBrowserSession() {
     }
 
-    public static RinkuBrowser openOrReuse(String requestedPageUrl, int width, int height) {
+    public static synchronized RinkuBrowser openOrReuse(String accountId, String requestedPageUrl, int width, int height) {
+        if (accountId == null || accountId.isBlank()) {
+            throw new IllegalArgumentException("The Skua account profile ID is empty.");
+        }
         if (requestedPageUrl == null || requestedPageUrl.isBlank()) {
             throw new IllegalArgumentException("The Skua player URL is empty.");
         }
 
-        if (browser != null && requestedPageUrl.equals(pageUrl)) {
-            browser.resize(Math.max(1, width), Math.max(1, height));
-            browser.setFocus(true);
-            return browser;
+        releaseFocusExcept(accountId);
+
+        BrowserSession session = BROWSERS.get(accountId);
+        if (session != null && requestedPageUrl.equals(session.pageUrl())) {
+            session.browser().resize(Math.max(1, width), Math.max(1, height));
+            session.browser().setFocus(true);
+            return session.browser();
         }
 
-        closeCurrentBrowser();
+        if (session != null) {
+            session.browser().close();
+        }
 
-        browser = Rinku.createBrowser(requestedPageUrl, false);
+        RinkuBrowser browser = Rinku.createBrowser(requestedPageUrl, false);
         browser.useBrowserControls(false);
         browser.resize(Math.max(1, width), Math.max(1, height));
         browser.setFocus(true);
-        pageUrl = requestedPageUrl;
-
+        BROWSERS.put(accountId, new BrowserSession(requestedPageUrl, browser));
         return browser;
     }
 
-    public static RinkuBrowser getBrowser() {
-        return browser;
+    public static synchronized RinkuBrowser getBrowser(String accountId) {
+        BrowserSession session = BROWSERS.get(accountId);
+        return session == null ? null : session.browser();
     }
 
-    public static void releaseFocus() {
-        if (browser != null) {
-            browser.setFocus(false);
+    public static synchronized List<String> getAccountIds() {
+        return BROWSERS.keySet().stream().sorted(Comparator.naturalOrder()).toList();
+    }
+
+    public static synchronized void releaseFocus(String accountId) {
+        BrowserSession session = BROWSERS.get(accountId);
+        if (session != null) {
+            session.browser().setFocus(false);
         }
     }
 
-    private static void closeCurrentBrowser() {
-        if (browser != null) {
-            browser.close();
-            browser = null;
-            pageUrl = "";
+    public static synchronized void releaseFocusExcept(String accountId) {
+        for (Map.Entry<String, BrowserSession> entry : BROWSERS.entrySet()) {
+            entry.getValue().browser().setFocus(entry.getKey().equals(accountId));
         }
+    }
+
+    public static synchronized void close(String accountId) {
+        BrowserSession session = BROWSERS.remove(accountId);
+        if (session != null) {
+            session.browser().close();
+        }
+    }
+
+    public static synchronized void closeAll() {
+        for (BrowserSession session : BROWSERS.values()) {
+            session.browser().close();
+        }
+        BROWSERS.clear();
+    }
+
+    private record BrowserSession(String pageUrl, RinkuBrowser browser) {
     }
 }
