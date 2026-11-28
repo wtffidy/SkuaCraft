@@ -6,7 +6,6 @@
   },
   "elements": [
     {
-      "name": "handheld casing",
       "from": [1, 0, 6.5],
       "to": [15, 16, 9.5],
       "faces": {
@@ -19,7 +18,6 @@
       }
     },
     {
-      "name": "raised display glass",
       "from": [3.75, 7.75, 6.35],
       "to": [12, 12, 6.5],
       "faces": {
@@ -27,7 +25,6 @@
       }
     },
     {
-      "name": "raised d-pad",
       "from": [4.75, 2.75, 6.2],
       "to": [6.25, 5.25, 6.5],
       "faces": {
@@ -35,7 +32,6 @@
       }
     },
     {
-      "name": "raised action buttons",
       "from": [9.25, 2.25, 6.2],
       "to": [11.75, 5.25, 6.5],
       "faces": {
