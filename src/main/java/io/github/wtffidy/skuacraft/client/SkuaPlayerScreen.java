@@ -28,6 +28,7 @@ public final class SkuaPlayerScreen extends Screen {
 
     private final SkuaToolsPanel toolsPanel = new SkuaToolsPanel();
     private String accountId;
+    private String profileName;
     private RinkuBrowser browser;
     private String pageUrl = "";
     private String status = "Starting Skua player...";
@@ -43,14 +44,31 @@ public final class SkuaPlayerScreen extends Screen {
     private int requestedBrowserPixelHeight;
 
     public SkuaPlayerScreen() {
-        this(PlayerHostLauncher.DEFAULT_ACCOUNT_ID);
+        this(PlayerHostLauncher.DEFAULT_ACCOUNT_ID, "Default Account");
     }
 
     public SkuaPlayerScreen(String accountId) {
+        this(accountId, defaultProfileName(accountId));
+    }
+
+    public SkuaPlayerScreen(String accountId, String profileName) {
         super(Component.literal("Skua Player"));
         this.accountId = accountId == null || accountId.isBlank()
                 ? PlayerHostLauncher.DEFAULT_ACCOUNT_ID
                 : accountId;
+        this.profileName = profileName == null || profileName.isBlank()
+                ? defaultProfileName(this.accountId)
+                : profileName.strip();
+    }
+
+    private static String defaultProfileName(String accountId) {
+        if (accountId == null || accountId.isBlank()
+                || PlayerHostLauncher.DEFAULT_ACCOUNT_ID.equals(accountId)) {
+            return "Default Account";
+        }
+
+        return "Account " + accountId.substring(0, Math.min(8, accountId.length()))
+                .toUpperCase(java.util.Locale.ROOT);
     }
 
     @Override
@@ -207,6 +225,7 @@ public final class SkuaPlayerScreen extends Screen {
                 browserX + browserWidth, browserY + browserHeight, SCREEN_FILL);
 
         graphics.drawString(font, "SKUA SYSTEMS", 21, 20, TEAL, false);
+        graphics.drawString(font, clip(profileName, Math.max(40, width - 350)), 145, 20, TEXT, false);
         graphics.drawString(font, hostReady ? "PLAYER READY" : "PLAYER STARTING",
                 width - 170, 20, hostReady ? TEAL : MUTED, false);
         graphics.fill(12, 40, width - 12, 66, 0xFF0D1722);

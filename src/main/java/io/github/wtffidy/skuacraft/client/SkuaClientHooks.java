@@ -14,6 +14,14 @@ public final class SkuaClientHooks {
     }
 
     public static void openConsole(String accountId) {
-        Minecraft.getInstance().setScreen(new SkuaPlayerScreen(accountId));
+        openConsole(accountId, "Default Account");
+    }
+
+    public static void openConsole(String accountId, String profileName) {
+        Minecraft.getInstance().setScreen(new SkuaPlayerScreen(accountId, profileName));
+    }
+
+    public static void openProfileEditor(net.minecraft.world.InteractionHand hand, String profileName) {
+        Minecraft.getInstance().setScreen(new SkuaProfileScreen(hand, profileName));
     }
 }

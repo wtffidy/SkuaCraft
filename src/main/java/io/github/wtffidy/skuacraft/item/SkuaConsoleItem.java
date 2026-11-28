@@ -27,6 +27,20 @@ public final class SkuaConsoleItem extends Item {
                 : PlayerHostLauncher.DEFAULT_ACCOUNT_ID;
     }
 
+    public static String getProfileName(ItemStack stack) {
+        if (stack.hasCustomHoverName()) {
+            String customName = stack.getHoverName().getString().strip();
+            if (!customName.isBlank()) {
+                return customName;
+            }
+        }
+
+        String accountId = getAccountId(stack);
+        return PlayerHostLauncher.DEFAULT_ACCOUNT_ID.equals(accountId)
+                ? "Default Account"
+                : "Account " + accountId.substring(0, Math.min(8, accountId.length())).toUpperCase(java.util.Locale.ROOT);
+    }
+
     public static String assignAccountId(ItemStack stack) {
         if (!stack.hasTag() || !stack.getTag().hasUUID(PROFILE_ID_KEY)) {
             stack.getOrCreateTag().putUUID(PROFILE_ID_KEY, UUID.randomUUID());
@@ -52,7 +66,15 @@ public final class SkuaConsoleItem extends Item {
         String accountId = getAccountId(stack);
 
         if (level.isClientSide) {
-            DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> SkuaClientHooks.openConsole(accountId));
+            if (player.isShiftKeyDown()) {
+                String profileName = getProfileName(stack);
+                DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
+                        () -> () -> SkuaClientHooks.openProfileEditor(hand, profileName));
+            } else {
+                String profileName = getProfileName(stack);
+                DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
+                        () -> () -> SkuaClientHooks.openConsole(accountId, profileName));
+            }
         }
 
         return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);

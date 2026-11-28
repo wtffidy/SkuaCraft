@@ -70,10 +70,11 @@ public final class SkuaRackScreen extends Screen {
 
             String label = slot.isEmpty()
                     ? "BAY " + (slot.slot() + 1) + "    EMPTY"
-                    : "BAY " + (slot.slot() + 1) + "    "
-                    + (slot.accountId().equals(PlayerHostLauncher.DEFAULT_ACCOUNT_ID)
-                    ? "DEFAULT ACCOUNT"
-                    : "ACCOUNT " + slot.accountId().substring(0, Math.min(8, slot.accountId().length())).toUpperCase());
+                    : "BAY " + (slot.slot() + 1) + "    " + slot.profileName();
+            int availableLabelWidth = panelWidth - 132;
+            while (font.width(label) > availableLabelWidth && label.length() > 8) {
+                label = label.substring(0, label.length() - 4) + "...";
+            }
             boolean isRunning = !slot.isEmpty() && running.contains(slot.accountId());
             String state = slot.isEmpty() ? "EMPTY" : onDisplay ? "ON DISPLAY" : isRunning ? "RUNNING" : "STARTING";
             graphics.drawString(font, label, left + 20, rowTop + 6, slot.isEmpty() ? MUTED : TEXT, false);
@@ -114,7 +115,7 @@ public final class SkuaRackScreen extends Screen {
                 SkuaCraft.NETWORK.sendToServer(new RackSelectPacket(rackPosition, slot.slot()));
 
                 if (Screen.hasShiftDown()) {
-                    Minecraft.getInstance().setScreen(new SkuaPlayerScreen(slot.accountId()));
+                    Minecraft.getInstance().setScreen(new SkuaPlayerScreen(slot.accountId(), slot.profileName()));
                 } else {
                     Minecraft.getInstance().setScreen(null);
                 }
@@ -126,7 +127,7 @@ public final class SkuaRackScreen extends Screen {
             }
 
             SkuaCraft.NETWORK.sendToServer(new RackEjectPacket(rackPosition, slot.slot()));
-            slots.set(index, new SkuaRackBlockEntity.AccountSlot(slot.slot(), ""));
+            slots.set(index, new SkuaRackBlockEntity.AccountSlot(slot.slot(), "", ""));
             if (selectedSlot == slot.slot()) {
                 selectedSlot = slots.stream().filter(candidate -> !candidate.isEmpty())
                         .mapToInt(SkuaRackBlockEntity.AccountSlot::slot).findFirst().orElse(-1);

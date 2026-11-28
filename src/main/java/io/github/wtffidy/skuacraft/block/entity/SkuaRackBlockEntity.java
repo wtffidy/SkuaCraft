@@ -146,7 +146,8 @@ public final class SkuaRackBlockEntity extends BlockEntity implements Container 
         for (int slot = 0; slot < items.size(); slot++) {
             ItemStack stack = items.get(slot);
             String accountId = stack.isEmpty() ? "" : SkuaConsoleItem.getAccountId(stack);
-            slots.add(new AccountSlot(slot, accountId));
+            String profileName = stack.isEmpty() ? "" : SkuaConsoleItem.getProfileName(stack);
+            slots.add(new AccountSlot(slot, accountId, profileName));
         }
 
         return List.copyOf(slots);
@@ -163,7 +164,7 @@ public final class SkuaRackBlockEntity extends BlockEntity implements Container 
         return List.copyOf(accountIds);
     }
 
-    public record AccountSlot(int slot, String accountId) {
+    public record AccountSlot(int slot, String accountId, String profileName) {
         public boolean isEmpty() {
             return accountId == null || accountId.isBlank();
         }
