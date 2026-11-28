@@ -53,13 +53,32 @@ public final class SkuaRackBlockEntity extends BlockEntity implements Container 
     public ItemStack ejectFirstController() {
         for (int slot = 0; slot < items.size(); slot++) {
             if (!items.get(slot).isEmpty()) {
-                ItemStack ejected = ContainerHelper.takeItem(items, slot);
-                setChanged();
-                return ejected;
+                return ejectController(slot);
             }
         }
 
         return ItemStack.EMPTY;
+    }
+
+    public ItemStack ejectController(int slot) {
+        if (slot < 0 || slot >= items.size() || items.get(slot).isEmpty()) {
+            return ItemStack.EMPTY;
+        }
+
+        ItemStack ejected = ContainerHelper.takeItem(items, slot);
+        setChanged();
+        return ejected;
+    }
+
+    public List<AccountSlot> getAccountSlots() {
+        java.util.ArrayList<AccountSlot> slots = new java.util.ArrayList<>(SLOT_COUNT);
+        for (int slot = 0; slot < items.size(); slot++) {
+            ItemStack stack = items.get(slot);
+            String accountId = stack.isEmpty() ? "" : SkuaConsoleItem.getAccountId(stack);
+            slots.add(new AccountSlot(slot, accountId));
+        }
+
+        return List.copyOf(slots);
     }
 
     public List<String> getAccountIds() {
@@ -71,6 +90,12 @@ public final class SkuaRackBlockEntity extends BlockEntity implements Container 
         }
 
         return List.copyOf(accountIds);
+    }
+
+    public record AccountSlot(int slot, String accountId) {
+        public boolean isEmpty() {
+            return accountId == null || accountId.isBlank();
+        }
     }
 
     @Override

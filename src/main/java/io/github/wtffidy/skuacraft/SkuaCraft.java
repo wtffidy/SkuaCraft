@@ -3,6 +3,10 @@ package io.github.wtffidy.skuacraft;
 import io.github.wtffidy.skuacraft.block.SkuaRackBlock;
 import io.github.wtffidy.skuacraft.block.entity.SkuaRackBlockEntity;
 import io.github.wtffidy.skuacraft.config.SkuaCraftConfig;
+import io.github.wtffidy.skuacraft.network.RackEjectPacket;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraftforge.network.NetworkRegistry;
+import net.minecraftforge.network.simple.SimpleChannel;
 import io.github.wtffidy.skuacraft.item.SkuaConsoleItem;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -30,6 +34,13 @@ public final class SkuaCraft {
             DeferredRegister.create(ForgeRegistries.BLOCKS, MOD_ID);
     public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES =
             DeferredRegister.create(ForgeRegistries.BLOCK_ENTITY_TYPES, MOD_ID);
+    public static final SimpleChannel NETWORK = NetworkRegistry.newSimpleChannel(
+            new ResourceLocation(MOD_ID, "main"),
+            () -> "1",
+            "1"::equals,
+            "1"::equals
+    );
+
     public static final DeferredRegister<Item> ITEMS =
             DeferredRegister.create(ForgeRegistries.ITEMS, MOD_ID);
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS =
@@ -76,5 +87,9 @@ public final class SkuaCraft {
         ITEMS.register(modEventBus);
         CREATIVE_TABS.register(modEventBus);
         SkuaCraftConfig.register();
+        NETWORK.registerMessage(0, RackEjectPacket.class,
+                RackEjectPacket::encode,
+                RackEjectPacket::decode,
+                RackEjectPacket::handle);
     }
 }
