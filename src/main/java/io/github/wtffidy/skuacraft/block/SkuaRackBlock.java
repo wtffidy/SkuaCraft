@@ -123,7 +123,7 @@ public final class SkuaRackBlock extends BaseEntityBlock {
 
     @Override
     public void onRemove(BlockState state, Level level, BlockPos position, BlockState newState, boolean isMoving) {
-        if (!state.is(newState.getBlock())) {
+        if (!level.isClientSide && !state.is(newState.getBlock())) {
             BlockEntity blockEntity = level.getBlockEntity(position);
             if (blockEntity instanceof SkuaRackBlockEntity rack) {
                 Containers.dropContents(level, position, rack);

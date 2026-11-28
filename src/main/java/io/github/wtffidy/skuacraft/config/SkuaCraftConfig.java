@@ -22,7 +22,7 @@ public final class SkuaCraftConfig {
 
         MAX_RUNNING_SESSIONS = BUILDER
                 .comment("Maximum number of local Skua PlayerHost accounts that may run at once. Each account uses its own profile.")
-                .defineInRange("maxRunningSessions", 4, 1, 12);
+                .defineInRange("maxRunningSessions", 6, 1, 12);
 
         BUILDER.pop();
         SPEC = BUILDER.build();

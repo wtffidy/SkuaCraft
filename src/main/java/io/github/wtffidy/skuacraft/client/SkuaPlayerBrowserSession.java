@@ -1,5 +1,6 @@
 package io.github.wtffidy.skuacraft.client;
 
+import de.keksuccino.rinku.Rinku;
 import de.keksuccino.rinku.RinkuBrowser;
 import net.minecraft.client.Minecraft;
 

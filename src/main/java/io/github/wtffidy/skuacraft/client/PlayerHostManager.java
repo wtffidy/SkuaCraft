@@ -33,6 +33,11 @@ public final class PlayerHostManager {
         thread.setDaemon(true);
         return thread;
     });
+    private static final ExecutorService STOPPER = Executors.newCachedThreadPool(task -> {
+        Thread thread = new Thread(task, "SkuaCraft-PlayerHost-Stopper");
+        thread.setDaemon(true);
+        return thread;
+    });
     private static final Map<String, PlayerHostInstance> INSTANCES = new ConcurrentHashMap<>();
     private static final Map<String, Object> ACCOUNT_LOCKS = new ConcurrentHashMap<>();
     private static final Object CAPACITY_LOCK = new Object();
@@ -65,10 +70,17 @@ public final class PlayerHostManager {
 
     public static void stop(String accountId) {
         String normalizedId = normalizeAccountId(accountId);
-        PlayerHostInstance instance = INSTANCES.remove(normalizedId);
-        if (instance != null) {
-            stopInstance(instance);
-        }
+        Object accountLock = ACCOUNT_LOCKS.computeIfAbsent(normalizedId, ignored -> new Object());
+
+        // Process shutdown can take a few seconds. Never make a Minecraft UI click wait for it.
+        STOPPER.execute(() -> {
+            synchronized (accountLock) {
+                PlayerHostInstance instance = INSTANCES.remove(normalizedId);
+                if (instance != null) {
+                    stopInstance(instance);
+                }
+            }
+        });
     }
 
     public static void stopAll() {
@@ -109,9 +121,14 @@ public final class PlayerHostManager {
 
             PlayerHostInstance instance = new PlayerHostInstance(accountId, paths.sessionFile(), paths.stopFile());
             synchronized (CAPACITY_LOCK) {
+                if (current != null) {
+                    // Remove a stale process entry before applying the shared capacity limit.
+                    INSTANCES.remove(accountId, current);
+                }
+
                 int maxSessions = SkuaCraftConfig.MAX_RUNNING_SESSIONS.get();
                 int activeSessions = (int) INSTANCES.values().stream().filter(PlayerHostInstance::isAlive).count();
-                if (current == null && activeSessions >= maxSessions) {
+                if (activeSessions >= maxSessions) {
                     dispatch(callback, LaunchResult.failed(
                             "The session limit has been reached (" + activeSessions + "/" + maxSessions
                                     + "). Stop another account or increase player.maxRunningSessions in skuacraft-client.toml."

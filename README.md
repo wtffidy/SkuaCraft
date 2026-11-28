@@ -46,6 +46,20 @@ The browser session stays alive when the handheld is hidden, so reopening the co
 
 The MVS v1.0.6 source is pinned as a Git submodule at vendor/MVS. The desktop VibeSkua ActiveX/WinForms Flash window is not launched or shown.
 
+## 🗄️ Multi-account server rack
+
+The Skua Server Rack is a six-bay block for keeping several handheld account profiles running at once. Each handheld receives its own profile ID. The ID is stored on the controller item, while Skua settings, PlayerHost session files, logs, Ruffle ports, and Chromium browser storage are kept in account-specific folders on the local Minecraft client.
+
+1. Put a Skua handheld in your inventory and let it tick once so it receives its profile ID.
+2. Hold the handheld and right-click the rack to insert it. Each rack has six bays.
+3. Right-click the rack with an empty hand to open the bay manager. Left-click a populated bay to display that account.
+4. In the bay manager, right-click a populated bay to eject the controller while leaving its account running. Ctrl+right-click stops that account before ejecting it.
+5. Shift+right-click the rack with an empty hand to eject the first populated bay as a quick action.
+
+The rack starts its installed account sessions in the background while its chunk is loaded on the local client. The default concurrent-session limit is six and can be changed with `player.maxRunningSessions` in `config/skuacraft-client.toml` (range 1–12). Running several AQW clients consumes additional CPU and memory.
+
+This first rack pass includes the supplied 3D block model, persistent controller bays, account manager, background session startup, and per-bay eject controls. The AQW game view is currently displayed in the Skua player screen after selecting a bay. The rack's physical front has not yet been converted into a live in-world browser display.
+
 ## 📦 Installation
 
 Every successful push to `main` now updates a rolling [latest main prerelease](https://github.com/wtffidy/SkuaCraft/releases/tag/main-latest). It contains the guided Windows installer and individual downloads with stable filenames, so the download links do not change between builds. Versioned releases are published separately from `v*` tags on the [Releases page](https://github.com/wtffidy/SkuaCraft/releases). To create one manually, open **Actions → Release SkuaCraft → Run workflow**. You can enter an exact version, choose the next build number, promote alpha to beta, or publish the `1.0.0` stable release.
