@@ -1,4 +1,6 @@
 {
   "item.skuacraft.skua_console": "Skua Console",
-  "itemGroup.skuacraft": "SkuaCraft"
+  "itemGroup.skuacraft": "SkuaCraft",
+  "block.skuacraft.server_rack": "Skua Server Rack",
+  "item.skuacraft.server_rack": "Skua Server Rack"
 }

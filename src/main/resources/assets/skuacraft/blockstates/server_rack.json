@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "skuacraft:block/server_rack", "y": 180 },
+    "facing=east": { "model": "skuacraft:block/server_rack", "y": 270 },
+    "facing=south": { "model": "skuacraft:block/server_rack", "y": 0 },
+    "facing=west": { "model": "skuacraft:block/server_rack", "y": 90 }
+  }
+}

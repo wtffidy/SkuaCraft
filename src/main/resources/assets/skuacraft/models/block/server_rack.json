@@ -1,0 +1,438 @@
+{
+  "credit": "SkuaCraft",
+  "gui_light": "front",
+  "texture_size": [128, 128],
+  "textures": {
+    "rack": "skuacraft:item/server_rack",
+    "particle": "skuacraft:item/server_rack"
+  },
+  "elements": [
+    {
+      "name": "shell",
+      "from": [1, 0.5, 3],
+      "to": [15, 15.5, 13],
+      "faces": {
+        "south": {
+          "uv": [0, 0.5, 14, 15.5],
+          "texture": "#rack"
+        },
+        "north": {
+          "uv": [14, 0.5, 15, 15.5],
+          "texture": "#rack"
+        },
+        "east": {
+          "uv": [14, 0.5, 15, 15.5],
+          "texture": "#rack"
+        },
+        "west": {
+          "uv": [14, 0.5, 15, 15.5],
+          "texture": "#rack"
+        },
+        "up": {
+          "uv": [15.0, 0.5, 15.5, 1.0],
+          "texture": "#rack"
+        },
+        "down": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        }
+      }
+    },
+    {
+      "name": "top_cap",
+      "from": [0.75, 15.5, 2.75],
+      "to": [15.25, 16, 13.25],
+      "faces": {
+        "north": {
+          "uv": [15.0, 0.5, 15.5, 1.0],
+          "texture": "#rack"
+        },
+        "south": {
+          "uv": [15.0, 0.5, 15.5, 1.0],
+          "texture": "#rack"
+        },
+        "east": {
+          "uv": [15.0, 0.5, 15.5, 1.0],
+          "texture": "#rack"
+        },
+        "west": {
+          "uv": [15.0, 0.5, 15.5, 1.0],
+          "texture": "#rack"
+        },
+        "down": {
+          "uv": [15.0, 0.5, 15.5, 1.0],
+          "texture": "#rack"
+        },
+        "up": {
+          "uv": [15.5, 0.5, 16.0, 1.0],
+          "texture": "#rack"
+        }
+      }
+    },
+    {
+      "name": "base",
+      "from": [0.75, 0, 2.75],
+      "to": [15.25, 0.5, 13.25],
+      "faces": {
+        "north": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "south": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "east": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "west": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "up": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "down": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        }
+      }
+    },
+    {
+      "name": "rail_l",
+      "from": [1, 0.5, 13],
+      "to": [2, 15.5, 13.75],
+      "faces": {
+        "south": {
+          "uv": [0, 0.5, 1, 15.5],
+          "texture": "#rack"
+        },
+        "up": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "down": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "east": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "west": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        }
+      }
+    },
+    {
+      "name": "rail_r",
+      "from": [14, 0.5, 13],
+      "to": [15, 15.5, 13.75],
+      "faces": {
+        "south": {
+          "uv": [13, 0.5, 14, 15.5],
+          "texture": "#rack"
+        },
+        "up": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "down": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "east": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "west": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        }
+      }
+    },
+    {
+      "name": "skua_node",
+      "from": [2, 13, 13],
+      "to": [14, 15, 13.5],
+      "faces": {
+        "south": {
+          "uv": [1, 1, 13, 3],
+          "texture": "#rack"
+        },
+        "up": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "down": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "east": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "west": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        }
+      }
+    },
+    {
+      "name": "drive_bays_a",
+      "from": [2, 11, 13],
+      "to": [14, 13, 13.5],
+      "faces": {
+        "south": {
+          "uv": [1, 3, 13, 5],
+          "texture": "#rack"
+        },
+        "up": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "down": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "east": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "west": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        }
+      }
+    },
+    {
+      "name": "switch",
+      "from": [2, 9, 13],
+      "to": [14, 11, 13.5],
+      "faces": {
+        "south": {
+          "uv": [1, 5, 13, 7],
+          "texture": "#rack"
+        },
+        "up": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "down": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "east": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "west": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        }
+      }
+    },
+    {
+      "name": "vent_blank",
+      "from": [2, 7, 13],
+      "to": [14, 9, 13.5],
+      "faces": {
+        "south": {
+          "uv": [1, 7, 13, 9],
+          "texture": "#rack"
+        },
+        "up": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "down": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "east": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "west": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        }
+      }
+    },
+    {
+      "name": "drive_bays_b",
+      "from": [2, 5, 13],
+      "to": [14, 7, 13.5],
+      "faces": {
+        "south": {
+          "uv": [1, 9, 13, 11],
+          "texture": "#rack"
+        },
+        "up": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "down": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "east": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "west": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        }
+      }
+    },
+    {
+      "name": "ups",
+      "from": [2, 3, 13],
+      "to": [14, 5, 13.5],
+      "faces": {
+        "south": {
+          "uv": [1, 11, 13, 13],
+          "texture": "#rack"
+        },
+        "up": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "down": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "east": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "west": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        }
+      }
+    },
+    {
+      "name": "patch_panel",
+      "from": [2, 1, 13],
+      "to": [14, 3, 13.5],
+      "faces": {
+        "south": {
+          "uv": [1, 13, 13, 15],
+          "texture": "#rack"
+        },
+        "up": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "down": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "east": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        },
+        "west": {
+          "uv": [15.0, 0.0, 15.5, 0.5],
+          "texture": "#rack"
+        }
+      }
+    },
+    {
+      "name": "cable_teal",
+      "from": [3, 2, 2.5],
+      "to": [3.6, 14, 3],
+      "faces": {
+        "north": {
+          "uv": [15.5, 1.0, 16.0, 1.5],
+          "texture": "#rack"
+        },
+        "east": {
+          "uv": [15.5, 1.0, 16.0, 1.5],
+          "texture": "#rack"
+        },
+        "west": {
+          "uv": [15.5, 1.0, 16.0, 1.5],
+          "texture": "#rack"
+        },
+        "up": {
+          "uv": [15.5, 1.0, 16.0, 1.5],
+          "texture": "#rack"
+        },
+        "down": {
+          "uv": [15.5, 1.0, 16.0, 1.5],
+          "texture": "#rack"
+        }
+      }
+    },
+    {
+      "name": "cable_orange",
+      "from": [12, 2, 2.5],
+      "to": [12.6, 14, 3],
+      "faces": {
+        "north": {
+          "uv": [15.0, 1.5, 15.5, 2.0],
+          "texture": "#rack"
+        },
+        "east": {
+          "uv": [15.0, 1.5, 15.5, 2.0],
+          "texture": "#rack"
+        },
+        "west": {
+          "uv": [15.0, 1.5, 15.5, 2.0],
+          "texture": "#rack"
+        },
+        "up": {
+          "uv": [15.0, 1.5, 15.5, 2.0],
+          "texture": "#rack"
+        },
+        "down": {
+          "uv": [15.0, 1.5, 15.5, 2.0],
+          "texture": "#rack"
+        }
+      }
+    }
+  ],
+  "display": {
+    "gui": {
+      "rotation": [15, -25, 0],
+      "translation": [0, 0, 0],
+      "scale": [0.76, 0.76, 0.76]
+    },
+    "ground": {
+      "rotation": [0, 0, 0],
+      "translation": [0, 3, 0],
+      "scale": [0.4, 0.4, 0.4]
+    },
+    "fixed": {
+      "rotation": [0, 180, 0],
+      "translation": [0, 0, 0],
+      "scale": [0.7, 0.7, 0.7]
+    },
+    "thirdperson_righthand": {
+      "rotation": [0, 90, -35],
+      "translation": [0, 3.5, 1],
+      "scale": [0.45, 0.45, 0.45]
+    },
+    "thirdperson_lefthand": {
+      "rotation": [0, -90, 35],
+      "translation": [0, 3.5, 1],
+      "scale": [0.45, 0.45, 0.45]
+    },
+    "firstperson_righthand": {
+      "rotation": [-10, 18, 0],
+      "translation": [0.5, 2.2, 1],
+      "scale": [0.55, 0.55, 0.55]
+    },
+    "firstperson_lefthand": {
+      "rotation": [-10, -18, 0],
+      "translation": [0.5, 2.2, 1],
+      "scale": [0.55, 0.55, 0.55]
+    }
+  }
+}
