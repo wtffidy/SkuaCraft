@@ -1,6 +1,5 @@
 package io.github.wtffidy.skuacraft.client;
 
-import de.keksuccino.rinku.Rinku;
 import de.keksuccino.rinku.RinkuBrowser;
 import net.minecraft.client.Minecraft;
 
@@ -47,7 +46,9 @@ public final class SkuaPlayerBrowserSession {
                     session.browser().close();
                 }
 
-                RinkuBrowser browser = Rinku.createBrowser(pageUrl, false, BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
+                RinkuBrowser browser = SkuaBrowserContextScope.createBrowser(
+                        accountId, pageUrl, false, BACKGROUND_WIDTH, BACKGROUND_HEIGHT
+                );
                 browser.useBrowserControls(false);
                 browser.setFocus(false);
                 BROWSERS.put(accountId, new BrowserSession(pageUrl, browser));
@@ -76,7 +77,9 @@ public final class SkuaPlayerBrowserSession {
             session.browser().close();
         }
 
-        RinkuBrowser browser = Rinku.createBrowser(requestedPageUrl, false);
+        RinkuBrowser browser = SkuaBrowserContextScope.createBrowser(
+                accountId, requestedPageUrl, false, width, height
+        );
         browser.useBrowserControls(false);
         browser.resize(Math.max(1, width), Math.max(1, height));
         browser.setFocus(true);

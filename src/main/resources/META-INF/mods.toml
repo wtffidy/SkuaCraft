@@ -12,6 +12,9 @@ description='''
 The real AdventureQuest Worlds game and Skua runtime, hosted inside a Minecraft handheld console.
 '''
 
+[[mixins]]
+config="skuacraft.mixins.json"
+
 [[dependencies.skuacraft]]
 modId="forge"
 mandatory=true
