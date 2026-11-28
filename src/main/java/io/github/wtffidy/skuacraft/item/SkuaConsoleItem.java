@@ -21,12 +21,26 @@ public final class SkuaConsoleItem extends Item {
         super(properties);
     }
 
+    public static String getAccountId(ItemStack stack) {
+        return stack.hasTag() && stack.getTag().hasUUID(PROFILE_ID_KEY)
+                ? stack.getTag().getUUID(PROFILE_ID_KEY).toString()
+                : PlayerHostLauncher.DEFAULT_ACCOUNT_ID;
+    }
+
+    public static String assignAccountId(ItemStack stack) {
+        if (!stack.hasTag() || !stack.getTag().hasUUID(PROFILE_ID_KEY)) {
+            stack.getOrCreateTag().putUUID(PROFILE_ID_KEY, UUID.randomUUID());
+        }
+
+        return stack.getTag().getUUID(PROFILE_ID_KEY).toString();
+    }
+
     @Override
     public void inventoryTick(ItemStack stack, Level level, Entity entity, int slotId, boolean isSelected) {
-        if (!level.isClientSide && entity instanceof Player && !stack.getOrCreateTag().hasUUID(PROFILE_ID_KEY)) {
+        if (!level.isClientSide && entity instanceof Player) {
             // The server assigns the persistent profile ID so it survives inventory sync,
             // saves, and moving the controller between a handheld and a rack.
-            stack.getOrCreateTag().putUUID(PROFILE_ID_KEY, UUID.randomUUID());
+            assignAccountId(stack);
         }
 
         super.inventoryTick(stack, level, entity, slotId, isSelected);
@@ -35,9 +49,7 @@ public final class SkuaConsoleItem extends Item {
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         ItemStack stack = player.getItemInHand(hand);
-        String accountId = stack.hasTag() && stack.getTag().hasUUID(PROFILE_ID_KEY)
-                ? stack.getTag().getUUID(PROFILE_ID_KEY).toString()
-                : PlayerHostLauncher.DEFAULT_ACCOUNT_ID;
+        String accountId = getAccountId(stack);
 
         if (level.isClientSide) {
             DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> SkuaClientHooks.openConsole(accountId));
