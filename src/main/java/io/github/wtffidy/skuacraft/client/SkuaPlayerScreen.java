@@ -11,6 +11,8 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import org.lwjgl.glfw.GLFW;
 
+import java.util.List;
+
 @OnlyIn(Dist.CLIENT)
 public final class SkuaPlayerScreen extends Screen {
     private static final int BACKGROUND = 0xFF080D14;
@@ -25,6 +27,7 @@ public final class SkuaPlayerScreen extends Screen {
     private static final int RED = 0xFFFF777D;
 
     private final SkuaToolsPanel toolsPanel = new SkuaToolsPanel();
+    private String accountId;
     private RinkuBrowser browser;
     private String pageUrl = "";
     private String status = "Starting Skua player...";
@@ -40,7 +43,14 @@ public final class SkuaPlayerScreen extends Screen {
     private int requestedBrowserPixelHeight;
 
     public SkuaPlayerScreen() {
+        this(PlayerHostLauncher.DEFAULT_ACCOUNT_ID);
+    }
+
+    public SkuaPlayerScreen(String accountId) {
         super(Component.literal("Skua Player"));
+        this.accountId = accountId == null || accountId.isBlank()
+                ? PlayerHostLauncher.DEFAULT_ACCOUNT_ID
+                : accountId;
     }
 
     @Override
@@ -48,7 +58,7 @@ public final class SkuaPlayerScreen extends Screen {
         super.init();
         layoutBrowser();
 
-        browser = SkuaPlayerBrowserSession.getBrowser();
+        browser = SkuaPlayerBrowserSession.getBrowser(accountId);
         if (browser != null) {
             rinkuReady = true;
         } else {
@@ -72,7 +82,7 @@ public final class SkuaPlayerScreen extends Screen {
             }
         }
 
-        PlayerHostLauncher.ensureRunning(result -> {
+        PlayerHostLauncher.ensureRunning(accountId, result -> {
             if (closing) {
                 return;
             }
@@ -102,7 +112,7 @@ public final class SkuaPlayerScreen extends Screen {
         // AQW's native stage is 958x550. Keep its aspect ratio and leave a small
         // border around the player so it never overwhelms the Minecraft screen.
         int availableWidth = Math.max(1, width - 36);
-        int availableHeight = Math.max(1, height - 78);
+        int availableHeight = Math.max(1, height - 102);
         double scale = Math.min(
                 0.90,
                 Math.min(availableWidth * 0.90 / 958.0, availableHeight * 0.90 / 550.0)
@@ -111,7 +121,7 @@ public final class SkuaPlayerScreen extends Screen {
         browserWidth = Math.max(1, (int) Math.floor(958.0 * scale));
         browserHeight = Math.max(1, (int) Math.floor(550.0 * scale));
         browserX = (width - browserWidth) / 2;
-        browserY = 48 + Math.max(0, (availableHeight - browserHeight) / 2);
+        browserY = 72 + Math.max(0, (availableHeight - browserHeight) / 2);
     }
 
     private int getBrowserPixelWidth() {
@@ -148,7 +158,7 @@ public final class SkuaPlayerScreen extends Screen {
         try {
             int pixelWidth = getBrowserPixelWidth();
             int pixelHeight = getBrowserPixelHeight();
-            browser = SkuaPlayerBrowserSession.openOrReuse(pageUrl, pixelWidth, pixelHeight);
+            browser = SkuaPlayerBrowserSession.openOrReuse(accountId, pageUrl, pixelWidth, pixelHeight);
             requestedBrowserPixelWidth = pixelWidth;
             requestedBrowserPixelHeight = pixelHeight;
             status = "SKUA PLAYER ONLINE  /  LOADING ADVENTUREQUEST WORLDS";
@@ -199,6 +209,8 @@ public final class SkuaPlayerScreen extends Screen {
         graphics.drawString(font, "SKUA SYSTEMS", 21, 20, TEAL, false);
         graphics.drawString(font, hostReady ? "PLAYER READY" : "PLAYER STARTING",
                 width - 170, 20, hostReady ? TEAL : MUTED, false);
+        graphics.fill(12, 40, width - 12, 66, 0xFF0D1722);
+        renderAccountTabs(graphics);
         graphics.fill(width - 83, 12, width - 12, 34, toolsPanel.isOpen() ? TEAL_DARK : 0xFF233447);
         graphics.drawCenteredString(font, toolsPanel.isOpen() ? "HIDE TOOLS" : "TOOLS  F6",
                 width - 47, 20, TEXT);
@@ -233,6 +245,111 @@ public final class SkuaPlayerScreen extends Screen {
 
         toolsPanel.render(graphics, font, width, height, mouseX, mouseY);
         super.render(graphics, mouseX, mouseY, partialTick);
+    }
+
+    private List<String> getAccountTabIds() {
+        java.util.LinkedHashSet<String> accountIds = new java.util.LinkedHashSet<>();
+        accountIds.addAll(PlayerHostLauncher.getRunningAccountIds());
+        accountIds.addAll(SkuaPlayerBrowserSession.getAccountIds());
+        accountIds.add(accountId);
+        return accountIds.stream().sorted().toList();
+    }
+
+    private void renderAccountTabs(GuiGraphics graphics) {
+        int x = 20;
+        for (String id : getAccountTabIds()) {
+            String label = id.equals(PlayerHostLauncher.DEFAULT_ACCOUNT_ID)
+                    ? "DEFAULT"
+                    : id.substring(0, Math.min(6, id.length())).toUpperCase();
+            int tabWidth = Math.max(54, font.width(label) + 16);
+            if (x + tabWidth > width - 95) {
+                break;
+            }
+
+            graphics.fill(x, 43, x + tabWidth, 63, id.equals(accountId) ? TEAL_DARK : 0xFF233447);
+            graphics.drawCenteredString(font, label, x + tabWidth / 2, 49,
+                    id.equals(accountId) ? TEXT : MUTED);
+            x += tabWidth + 5;
+        }
+
+        graphics.drawString(font, "CTRL+TAB  SWITCH", Math.max(20, width - 145), 49, MUTED, false);
+    }
+
+    private String accountAt(double mouseX, double mouseY) {
+        if (mouseY < 40 || mouseY > 66) {
+            return null;
+        }
+
+        int x = 20;
+        for (String id : getAccountTabIds()) {
+            String label = id.equals(PlayerHostLauncher.DEFAULT_ACCOUNT_ID)
+                    ? "DEFAULT"
+                    : id.substring(0, Math.min(6, id.length())).toUpperCase();
+            int tabWidth = Math.max(54, font.width(label) + 16);
+            if (x + tabWidth > width - 95) {
+                break;
+            }
+            if (mouseX >= x && mouseX <= x + tabWidth) {
+                return id;
+            }
+            x += tabWidth + 5;
+        }
+
+        return null;
+    }
+
+    private void cycleAccount() {
+        List<String> accountIds = getAccountTabIds();
+        if (accountIds.size() < 2) {
+            return;
+        }
+
+        int currentIndex = accountIds.indexOf(accountId);
+        int nextIndex = (currentIndex + 1) % accountIds.size();
+        selectAccount(accountIds.get(nextIndex));
+    }
+
+    private void selectAccount(String nextAccountId) {
+        if (nextAccountId == null || nextAccountId.equals(accountId)) {
+            return;
+        }
+
+        SkuaPlayerBrowserSession.releaseFocus(accountId);
+        PlayerControlClient.disconnect();
+        accountId = nextAccountId;
+        browser = SkuaPlayerBrowserSession.getBrowser(accountId);
+        hostReady = false;
+        status = "SWITCHING TO ACCOUNT " + accountId.substring(0, Math.min(8, accountId.length())).toUpperCase();
+        startSelectedAccount();
+    }
+
+    private void startSelectedAccount() {
+        String requestedAccountId = accountId;
+        PlayerHostLauncher.ensureRunning(requestedAccountId, result -> {
+            if (closing || !requestedAccountId.equals(accountId)) {
+                return;
+            }
+
+            hostReady = result.success();
+            if (!hostReady) {
+                PlayerControlClient.disconnect();
+                status = result.message();
+                return;
+            }
+
+            PlayerControlClient.connect(result.controlUrl(), result.controlToken());
+            toolsPanel.refresh();
+            pageUrl = result.pageUrl();
+            browser = SkuaPlayerBrowserSession.getBrowser(accountId);
+            status = rinkuReady ? "PLAYER CORE READY  /  OPENING GAME" : "PLAYER CORE READY  /  WAITING FOR RINKU";
+            if (browser != null) {
+                browser.setFocus(true);
+                resizeBrowser();
+                status = "SKUA PLAYER ONLINE  /  RETURNING TO LIVE GAME";
+            } else {
+                tryOpenPlayer();
+            }
+        });
     }
 
     private void renderPlayerStatus(GuiGraphics graphics) {
@@ -286,6 +403,12 @@ public final class SkuaPlayerScreen extends Screen {
             return true;
         }
 
+        String clickedAccount = accountAt(mouseX, mouseY);
+        if (button == 0 && clickedAccount != null) {
+            selectAccount(clickedAccount);
+            return true;
+        }
+
         if (toolsPanel.mouseClicked(mouseX, mouseY, button, width, height)) {
             return true;
         }
@@ -302,6 +425,7 @@ public final class SkuaPlayerScreen extends Screen {
     @Override
     public boolean mouseReleased(double mouseX, double mouseY, int button) {
         if (toolsPanel.isPointerOver(mouseX, mouseY, width, height)
+                || mouseY >= 40 && mouseY <= 66
                 || mouseY >= 12 && mouseY <= 34 && mouseX >= width - 83 && mouseX <= width - 12) {
             return true;
         }
@@ -369,6 +493,11 @@ public final class SkuaPlayerScreen extends Screen {
             return true;
         }
 
+        if (keyCode == GLFW.GLFW_KEY_TAB && (modifiers & GLFW.GLFW_MOD_CONTROL) != 0) {
+            cycleAccount();
+            return true;
+        }
+
         if (toolsPanel.isOpen()) {
             toolsPanel.keyPressed(keyCode, scanCode, modifiers);
             return true;
@@ -417,7 +546,7 @@ public final class SkuaPlayerScreen extends Screen {
     @Override
     public void onClose() {
         closing = true;
-        SkuaPlayerBrowserSession.releaseFocus();
+        SkuaPlayerBrowserSession.releaseFocus(accountId);
         super.onClose();
     }
 }
