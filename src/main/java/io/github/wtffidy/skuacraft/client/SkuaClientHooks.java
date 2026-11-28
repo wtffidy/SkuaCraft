@@ -10,6 +10,10 @@ public final class SkuaClientHooks {
     }
 
     public static void openConsole() {
-        Minecraft.getInstance().setScreen(new SkuaPlayerScreen());
+        openConsole(PlayerHostLauncher.DEFAULT_ACCOUNT_ID);
+    }
+
+    public static void openConsole(String accountId) {
+        Minecraft.getInstance().setScreen(new SkuaPlayerScreen(accountId));
     }
 }
