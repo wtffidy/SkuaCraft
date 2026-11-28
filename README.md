@@ -33,7 +33,7 @@ The browser session stays alive when the handheld is hidden, so reopening the co
 | Loader | Forge 47.4.28 |
 | Java | 17 |
 | Browser surface | Rinku 3.0.4 for Forge 1.20.1 |
-| Player host | MVS v1.0.6 Ruffle + Skua Core, .NET 10 |
+| Player host | MVS v1.0.7 Ruffle + Skua Core, .NET 10 |
 | Initial platform | Windows x64 |
 
 ## 🧠 How the player is assembled
@@ -44,7 +44,7 @@ The browser session stays alive when the handheld is hidden, so reopening the co
 - **Skua Core** provides the real IScriptInterface, bot APIs, script manager and runtime.
 - **SkuaCraft** owns the handheld, in-game display, input forwarding and Minecraft lifecycle.
 
-The MVS v1.0.6 source is pinned as a Git submodule at vendor/MVS. The desktop VibeSkua ActiveX/WinForms Flash window is not launched or shown.
+The MVS v1.0.7 source is pinned as a Git submodule at vendor/MVS. The desktop VibeSkua ActiveX/WinForms Flash window is not launched or shown.
 
 ## 📦 Installation
 
@@ -89,7 +89,7 @@ The mod JAR is copied into the repository's `build/` folder, PlayerHost is publi
 | Source | Role |
 | --- | --- |
 | [wtffidy/VibeSkua](https://github.com/wtffidy/VibeSkua) | Current client behaviour and API reference |
-| [Arglax/MVS v1.0.6](https://github.com/Arglax/MVS/tree/v1.0.6) | Pinned Ruffle player host and portable Skua Core runtime |
+| [Arglax/MVS v1.0.7](https://github.com/Arglax/MVS/tree/v1.0.7) | Pinned Ruffle player host and portable Skua Core runtime |
 | [Rinku](https://github.com/Keksuccino/Rinku) | Chromium browser surface for Minecraft |
 | [auqw/Scripts (Skua)](https://github.com/auqw/Scripts/tree/Skua) | Official upstream script catalogue, metadata, source files and update feed |
 
