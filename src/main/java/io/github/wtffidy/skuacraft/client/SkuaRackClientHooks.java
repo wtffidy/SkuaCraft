@@ -61,6 +61,6 @@ public final class SkuaRackClientHooks {
             return;
         }
 
-        minecraft.setScreen(new SkuaRackScreen(position, rack.getAccountSlots()));
+        minecraft.setScreen(new SkuaRackScreen(position, rack.getAccountSlots(), rack.getSelectedSlot()));
     }
 }

@@ -56,9 +56,9 @@ The Skua Server Rack is a six-bay block for keeping several handheld account pro
 4. In the bay manager, right-click a populated bay to eject the controller while leaving its account running. Ctrl+right-click stops that account before ejecting it.
 5. Shift+right-click the rack with an empty hand to eject the first populated bay as a quick action.
 
-The rack starts its installed account sessions in the background while its chunk is loaded on the local client. The default concurrent-session limit is six and can be changed with `player.maxRunningSessions` in `config/skuacraft-client.toml` (range 1–12). Running several AQW clients consumes additional CPU and memory.
+The rack starts its installed account sessions in the background while its chunk is loaded on the local client. The selected account's live Rinku texture is rendered on the small AQW panel on the rack's front. The default concurrent-session limit is six and can be changed with `player.maxRunningSessions` in `config/skuacraft-client.toml` (range 1–12). Running several AQW clients consumes additional CPU and memory.
 
-This first rack pass includes the supplied 3D block model, persistent controller bays, account manager, background session startup, and per-bay eject controls. The AQW game view is currently displayed in the Skua player screen after selecting a bay. The rack's physical front has not yet been converted into a live in-world browser display.
+In the rack manager, left-click a bay to select its live front-panel display. Shift+left-click opens that account in the full Skua player screen for input. Right-click ejects the selected controller without stopping it; Ctrl+right-click stops it before ejecting.
 
 ## 📦 Installation
 

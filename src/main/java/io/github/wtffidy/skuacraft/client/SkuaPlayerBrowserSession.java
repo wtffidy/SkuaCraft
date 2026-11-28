@@ -40,6 +40,7 @@ public final class SkuaPlayerBrowserSession {
                 BrowserSession session = BROWSERS.get(accountId);
                 if (session != null && pageUrl.equals(session.pageUrl())) {
                     session.browser().setFocus(false);
+                    session.browser().resize(BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
                     return;
                 }
 
@@ -101,12 +102,17 @@ public final class SkuaPlayerBrowserSession {
         BrowserSession session = BROWSERS.get(accountId);
         if (session != null) {
             session.browser().setFocus(false);
+            session.browser().resize(BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
         }
     }
 
     public static synchronized void releaseFocusExcept(String accountId) {
         for (Map.Entry<String, BrowserSession> entry : BROWSERS.entrySet()) {
-            entry.getValue().browser().setFocus(entry.getKey().equals(accountId));
+            boolean focused = entry.getKey().equals(accountId);
+            entry.getValue().browser().setFocus(focused);
+            if (!focused) {
+                entry.getValue().browser().resize(BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
+            }
         }
     }
 

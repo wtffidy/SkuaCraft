@@ -22,6 +22,7 @@ public final class SkuaRackBlockEntity extends BlockEntity implements Container 
     public static final int SLOT_COUNT = 6;
 
     private final NonNullList<ItemStack> items = NonNullList.withSize(SLOT_COUNT, ItemStack.EMPTY);
+    private int selectedSlot = -1;
 
     public SkuaRackBlockEntity(BlockPos position, BlockState state) {
         super(SkuaCraft.SERVER_RACK_ENTITY.get(), position, state);
@@ -42,6 +43,9 @@ public final class SkuaRackBlockEntity extends BlockEntity implements Container 
         for (int slot = 0; slot < items.size(); slot++) {
             if (items.get(slot).isEmpty()) {
                 items.set(slot, controller.copyWithCount(1));
+                if (selectedSlot < 0 || selectedSlot >= items.size() || items.get(selectedSlot).isEmpty()) {
+                    selectedSlot = slot;
+                }
                 setChanged();
                 return true;
             }
@@ -66,8 +70,47 @@ public final class SkuaRackBlockEntity extends BlockEntity implements Container 
         }
 
         ItemStack ejected = ContainerHelper.takeItem(items, slot);
+        if (selectedSlot == slot) {
+            selectedSlot = findFirstOccupiedSlot();
+        }
         setChanged();
         return ejected;
+    }
+
+    public int getSelectedSlot() {
+        return selectedSlot;
+    }
+
+    public String getSelectedAccountId() {
+        if (selectedSlot < 0 || selectedSlot >= items.size()) {
+            return "";
+        }
+
+        ItemStack selected = items.get(selectedSlot);
+        return selected.isEmpty() ? "" : SkuaConsoleItem.getAccountId(selected);
+    }
+
+    public boolean setSelectedSlot(int slot) {
+        if (slot < 0 || slot >= items.size() || items.get(slot).isEmpty()) {
+            return false;
+        }
+
+        if (selectedSlot != slot) {
+            selectedSlot = slot;
+            setChanged();
+        }
+
+        return true;
+    }
+
+    private int findFirstOccupiedSlot() {
+        for (int slot = 0; slot < items.size(); slot++) {
+            if (!items.get(slot).isEmpty()) {
+                return slot;
+            }
+        }
+
+        return -1;
     }
 
     public List<AccountSlot> getAccountSlots() {
@@ -102,12 +145,17 @@ public final class SkuaRackBlockEntity extends BlockEntity implements Container 
     public void load(CompoundTag tag) {
         super.load(tag);
         ContainerHelper.loadAllItems(tag, items);
+        selectedSlot = tag.contains("SelectedSlot") ? tag.getInt("SelectedSlot") : -1;
+        if (selectedSlot < 0 || selectedSlot >= items.size() || items.get(selectedSlot).isEmpty()) {
+            selectedSlot = findFirstOccupiedSlot();
+        }
     }
 
     @Override
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
         ContainerHelper.saveAllItems(tag, items);
+        tag.putInt("SelectedSlot", selectedSlot);
     }
 
     @Override

@@ -3,6 +3,7 @@ package io.github.wtffidy.skuacraft.client;
 import io.github.wtffidy.skuacraft.SkuaCraft;
 import io.github.wtffidy.skuacraft.block.entity.SkuaRackBlockEntity;
 import io.github.wtffidy.skuacraft.network.RackEjectPacket;
+import io.github.wtffidy.skuacraft.network.RackSelectPacket;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -25,11 +26,13 @@ public final class SkuaRackScreen extends Screen {
 
     private final BlockPos rackPosition;
     private final List<SkuaRackBlockEntity.AccountSlot> slots;
+    private int selectedSlot;
 
-    public SkuaRackScreen(BlockPos rackPosition, List<SkuaRackBlockEntity.AccountSlot> slots) {
+    public SkuaRackScreen(BlockPos rackPosition, List<SkuaRackBlockEntity.AccountSlot> slots, int selectedSlot) {
         super(Component.literal("Skua Server Rack"));
         this.rackPosition = rackPosition.immutable();
         this.slots = new ArrayList<>(slots);
+        this.selectedSlot = selectedSlot;
     }
 
     @Override
@@ -58,11 +61,12 @@ public final class SkuaRackScreen extends Screen {
 
         for (int index = 0; index < slots.size(); index++) {
             SkuaRackBlockEntity.AccountSlot slot = slots.get(index);
+            boolean onDisplay = slot.slot() == selectedSlot;
             int rowTop = top + 54 + index * 22;
             boolean hovered = mouseX >= left + 12 && mouseX <= left + panelWidth - 12
                     && mouseY >= rowTop && mouseY <= rowTop + 19;
-            graphics.fill(left + 12, rowTop, left + panelWidth - 12, rowTop + 19,
-                    hovered ? 0xFF1F3947 : 0xFF1B2936);
+            int rowColor = onDisplay ? 0xFF174F4A : hovered ? 0xFF1F3947 : 0xFF1B2936;
+            graphics.fill(left + 12, rowTop, left + panelWidth - 12, rowTop + 19, rowColor);
 
             String label = slot.isEmpty()
                     ? "BAY " + (slot.slot() + 1) + "    EMPTY"
@@ -71,16 +75,17 @@ public final class SkuaRackScreen extends Screen {
                     ? "DEFAULT ACCOUNT"
                     : "ACCOUNT " + slot.accountId().substring(0, Math.min(8, slot.accountId().length())).toUpperCase());
             boolean isRunning = !slot.isEmpty() && running.contains(slot.accountId());
+            String state = slot.isEmpty() ? "EMPTY" : onDisplay ? "ON DISPLAY" : isRunning ? "RUNNING" : "STARTING";
             graphics.drawString(font, label, left + 20, rowTop + 6, slot.isEmpty() ? MUTED : TEXT, false);
-            graphics.drawString(font, slot.isEmpty() ? "EMPTY" : isRunning ? "RUNNING" : "STARTING",
-                    left + panelWidth - 83, rowTop + 6, isRunning ? TEAL : MUTED, false);
+            graphics.drawString(font, state, left + panelWidth - 92, rowTop + 6,
+                    onDisplay || isRunning ? TEAL : MUTED, false);
         }
 
         graphics.fill(left, top + panelHeight - 30, left + panelWidth, top + panelHeight - 29, EDGE);
         graphics.drawString(font, "LEFT CLICK  DISPLAY",
                 left + 14, top + panelHeight - 20, MUTED, false);
-        graphics.drawString(font, "RIGHT CLICK  EJECT  |  CTRL+RIGHT CLICK  STOP + EJECT",
-                left + 160, top + panelHeight - 20, MUTED, false);
+        graphics.drawString(font, "SHIFT+LEFT  CONTROL  |  RIGHT  EJECT  |  CTRL+RIGHT  STOP + EJECT",
+                left + 155, top + panelHeight - 20, MUTED, false);
 
         super.render(graphics, mouseX, mouseY, partialTick);
     }
@@ -105,7 +110,14 @@ public final class SkuaRackScreen extends Screen {
             }
 
             if (button == 0) {
-                Minecraft.getInstance().setScreen(new SkuaPlayerScreen(slot.accountId()));
+                selectedSlot = slot.slot();
+                SkuaCraft.NETWORK.sendToServer(new RackSelectPacket(rackPosition, slot.slot()));
+
+                if (Screen.hasShiftDown()) {
+                    Minecraft.getInstance().setScreen(new SkuaPlayerScreen(slot.accountId()));
+                } else {
+                    Minecraft.getInstance().setScreen(null);
+                }
                 return true;
             }
 
@@ -115,6 +127,10 @@ public final class SkuaRackScreen extends Screen {
 
             SkuaCraft.NETWORK.sendToServer(new RackEjectPacket(rackPosition, slot.slot()));
             slots.set(index, new SkuaRackBlockEntity.AccountSlot(slot.slot(), ""));
+            if (selectedSlot == slot.slot()) {
+                selectedSlot = slots.stream().filter(candidate -> !candidate.isEmpty())
+                        .mapToInt(SkuaRackBlockEntity.AccountSlot::slot).findFirst().orElse(-1);
+            }
             return true;
         }
 

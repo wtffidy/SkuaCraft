@@ -4,6 +4,7 @@ import io.github.wtffidy.skuacraft.block.SkuaRackBlock;
 import io.github.wtffidy.skuacraft.block.entity.SkuaRackBlockEntity;
 import io.github.wtffidy.skuacraft.config.SkuaCraftConfig;
 import io.github.wtffidy.skuacraft.network.RackEjectPacket;
+import io.github.wtffidy.skuacraft.network.RackSelectPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.simple.SimpleChannel;
@@ -91,5 +92,9 @@ public final class SkuaCraft {
                 RackEjectPacket::encode,
                 RackEjectPacket::decode,
                 RackEjectPacket::handle);
+        NETWORK.registerMessage(1, RackSelectPacket.class,
+                RackSelectPacket::encode,
+                RackSelectPacket::decode,
+                RackSelectPacket::handle);
     }
 }
