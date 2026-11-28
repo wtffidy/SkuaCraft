@@ -18,10 +18,12 @@ public final class SkuaClientHooks {
     }
 
     public static void openConsole(String accountId, String profileName) {
+        SkuaPlayerBrowserSession.setProfileName(accountId, profileName);
         Minecraft.getInstance().setScreen(new SkuaPlayerScreen(accountId, profileName));
     }
 
-    public static void openProfileEditor(net.minecraft.world.InteractionHand hand, String profileName) {
-        Minecraft.getInstance().setScreen(new SkuaProfileScreen(hand, profileName));
+    public static void openProfileEditor(String accountId, net.minecraft.world.InteractionHand hand, String profileName) {
+        SkuaPlayerBrowserSession.setProfileName(accountId, profileName);
+        Minecraft.getInstance().setScreen(new SkuaProfileScreen(accountId, hand, profileName));
     }
 }

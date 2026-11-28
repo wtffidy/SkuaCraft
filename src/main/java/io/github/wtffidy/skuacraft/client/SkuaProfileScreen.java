@@ -19,12 +19,14 @@ public final class SkuaProfileScreen extends Screen {
     private static final int TEAL = 0xFF57E6C1;
     private static final int MUTED = 0xFF91A5B4;
 
+    private final String accountId;
     private final InteractionHand hand;
     private final String initialName;
     private EditBox profileName;
 
-    public SkuaProfileScreen(InteractionHand hand, String initialName) {
+    public SkuaProfileScreen(String accountId, InteractionHand hand, String initialName) {
         super(Component.literal("Rename Skua Profile"));
+        this.accountId = accountId;
         this.hand = hand;
         this.initialName = initialName == null ? "" : initialName;
     }
@@ -57,6 +59,7 @@ public final class SkuaProfileScreen extends Screen {
         }
 
         SkuaCraft.NETWORK.sendToServer(new RenameConsolePacket(hand, name));
+        SkuaPlayerBrowserSession.setProfileName(accountId, name);
         minecraft.setScreen(null);
     }
 

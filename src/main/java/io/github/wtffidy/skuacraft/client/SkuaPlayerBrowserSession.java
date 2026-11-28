@@ -13,6 +13,7 @@ public final class SkuaPlayerBrowserSession {
     private static final int BACKGROUND_WIDTH = 480;
     private static final int BACKGROUND_HEIGHT = 276;
     private static final Map<String, BrowserSession> BROWSERS = new HashMap<>();
+    private static final Map<String, String> PROFILE_NAMES = new HashMap<>();
 
     private SkuaPlayerBrowserSession() {
     }
@@ -92,6 +93,29 @@ public final class SkuaPlayerBrowserSession {
     public static synchronized RinkuBrowser getBrowser(String accountId) {
         BrowserSession session = BROWSERS.get(accountId);
         return session == null ? null : session.browser();
+    }
+
+    public static synchronized void setProfileName(String accountId, String profileName) {
+        if (accountId == null || accountId.isBlank() || profileName == null || profileName.isBlank()) {
+            return;
+        }
+
+        PROFILE_NAMES.put(accountId, profileName.strip());
+    }
+
+    public static synchronized String getProfileName(String accountId) {
+        if (accountId == null || accountId.isBlank()
+                || PlayerHostLauncher.DEFAULT_ACCOUNT_ID.equals(accountId)) {
+            return "Default Account";
+        }
+
+        String profileName = PROFILE_NAMES.get(accountId);
+        if (profileName != null && !profileName.isBlank()) {
+            return profileName;
+        }
+
+        return "Account " + accountId.substring(0, Math.min(8, accountId.length()))
+                .toUpperCase(java.util.Locale.ROOT);
     }
 
     public static synchronized List<String> getAccountIds() {

@@ -8,6 +8,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
@@ -25,6 +26,12 @@ public final class SkuaRackClientHooks {
         if (level == null || minecraft.player == null || !rack.isOwner(minecraft.player)
                 || level.getGameTime() % 40 != 0) {
             return;
+        }
+
+        for (SkuaRackBlockEntity.AccountSlot slot : rack.getAccountSlots()) {
+            if (!slot.isEmpty()) {
+                SkuaPlayerBrowserSession.setProfileName(slot.accountId(), slot.profileName());
+            }
         }
 
         synchronized (STARTED_ACCOUNTS) {
@@ -63,6 +70,13 @@ public final class SkuaRackClientHooks {
             return;
         }
 
-        minecraft.setScreen(new SkuaRackScreen(position, rack.getAccountSlots(), rack.getSelectedSlot()));
+        List<SkuaRackBlockEntity.AccountSlot> slots = rack.getAccountSlots();
+        for (SkuaRackBlockEntity.AccountSlot slot : slots) {
+            if (!slot.isEmpty()) {
+                SkuaPlayerBrowserSession.setProfileName(slot.accountId(), slot.profileName());
+            }
+        }
+
+        minecraft.setScreen(new SkuaRackScreen(position, slots, rack.getSelectedSlot()));
     }
 }

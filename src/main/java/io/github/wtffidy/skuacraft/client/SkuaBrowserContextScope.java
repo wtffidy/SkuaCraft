@@ -47,12 +47,8 @@ public final class SkuaBrowserContextScope {
             throw new IllegalStateException("A Skua account browser is already being created on this render thread.");
         }
 
-        // Rinku's preload pool creates browsers against the global CEF context.
-        // Disable it so every account browser is constructed through this scope.
-        if (Rinku.getSettings().isBrowserPreloadEnabled()) {
-            Rinku.getSettings().setBrowserPreloadEnabled(false);
-        }
-
+        // Bypass Rinku's shared preload pool so this browser is created with
+        // the account-specific CEF request context rather than a pooled global one.
         CefRequestContext context = REQUEST_CONTEXTS.computeIfAbsent(
                 accountId,
                 SkuaBrowserContextScope::createRequestContext
@@ -65,7 +61,10 @@ public final class SkuaBrowserContextScope {
         CONTEXT_CONSUMED.set(Boolean.FALSE);
 
         try {
-            RinkuBrowser browser = Rinku.createBrowser(pageUrl, transparent, Math.max(1, width), Math.max(1, height));
+            RinkuBrowser browser = new RinkuBrowser(Rinku.getClient(), pageUrl, transparent);
+            browser.setCloseAllowed();
+            browser.createImmediately();
+            browser.resize(Math.max(1, width), Math.max(1, height));
             if (!Boolean.TRUE.equals(CONTEXT_CONSUMED.get())) {
                 browser.close();
                 throw new IllegalStateException(

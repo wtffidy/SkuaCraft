@@ -69,7 +69,7 @@ public final class SkuaConsoleItem extends Item {
             if (player.isShiftKeyDown()) {
                 String profileName = getProfileName(stack);
                 DistExecutor.unsafeRunWhenOn(Dist.CLIENT,
-                        () -> () -> SkuaClientHooks.openProfileEditor(hand, profileName));
+                        () -> () -> SkuaClientHooks.openProfileEditor(accountId, hand, profileName));
             } else {
                 String profileName = getProfileName(stack);
                 DistExecutor.unsafeRunWhenOn(Dist.CLIENT,

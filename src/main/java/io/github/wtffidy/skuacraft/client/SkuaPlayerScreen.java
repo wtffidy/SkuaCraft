@@ -277,10 +277,8 @@ public final class SkuaPlayerScreen extends Screen {
     private void renderAccountTabs(GuiGraphics graphics) {
         int x = 20;
         for (String id : getAccountTabIds()) {
-            String label = id.equals(PlayerHostLauncher.DEFAULT_ACCOUNT_ID)
-                    ? "DEFAULT"
-                    : id.substring(0, Math.min(6, id.length())).toUpperCase();
-            int tabWidth = Math.max(54, font.width(label) + 16);
+            String label = getAccountTabLabel(id);
+            int tabWidth = getAccountTabWidth(label);
             if (x + tabWidth > width - 95) {
                 break;
             }
@@ -294,6 +292,14 @@ public final class SkuaPlayerScreen extends Screen {
         graphics.drawString(font, "CTRL+TAB  SWITCH", Math.max(20, width - 145), 49, MUTED, false);
     }
 
+    private String getAccountTabLabel(String id) {
+        return clip(SkuaPlayerBrowserSession.getProfileName(id).toUpperCase(java.util.Locale.ROOT), 108);
+    }
+
+    private int getAccountTabWidth(String label) {
+        return Math.max(54, Math.min(128, font.width(label) + 16));
+    }
+
     private String accountAt(double mouseX, double mouseY) {
         if (mouseY < 40 || mouseY > 66) {
             return null;
@@ -301,10 +307,8 @@ public final class SkuaPlayerScreen extends Screen {
 
         int x = 20;
         for (String id : getAccountTabIds()) {
-            String label = id.equals(PlayerHostLauncher.DEFAULT_ACCOUNT_ID)
-                    ? "DEFAULT"
-                    : id.substring(0, Math.min(6, id.length())).toUpperCase();
-            int tabWidth = Math.max(54, font.width(label) + 16);
+            String label = getAccountTabLabel(id);
+            int tabWidth = getAccountTabWidth(label);
             if (x + tabWidth > width - 95) {
                 break;
             }
@@ -336,6 +340,7 @@ public final class SkuaPlayerScreen extends Screen {
         SkuaPlayerBrowserSession.releaseFocus(accountId);
         PlayerControlClient.disconnect();
         accountId = nextAccountId;
+        profileName = SkuaPlayerBrowserSession.getProfileName(accountId);
         browser = SkuaPlayerBrowserSession.getBrowser(accountId);
         hostReady = false;
         status = "SWITCHING TO ACCOUNT " + accountId.substring(0, Math.min(8, accountId.length())).toUpperCase();
